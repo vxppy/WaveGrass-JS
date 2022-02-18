@@ -1,0 +1,22 @@
+{
+  "name": "wavegrass",
+  "version": "0.0.1",
+  "description": "An experimental langugae",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Venger-King/WaveGrass.git"
+  },
+  "author": "Venger King",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/Venger-King/WaveGrass/issues"
+  },
+  "homepage": "https://github.com/Venger-King/WaveGrass#readme",
+  "dependencies": {
+    "fs": "^0.0.1-security"
+  }
+}
