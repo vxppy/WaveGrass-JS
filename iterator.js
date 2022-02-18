@@ -1,11 +1,17 @@
 /**
- * 
- * @param { Array|string} iterable 
- * @returns { { next: () => T, curr: () => T, move: () => T , prev: () => T } }
+ * @typedef {{ next: () => string | T,
+ *  curr: () => string | T,
+ *  move: () => string | T,
+ *  prev: () => string | T }} IterableReturn 
  */
 
+/**
+ * @template T
+ * @param { string | Array<T> } iterable 
+ * @returns { IterableReturn }
+ */
 const iterator = (iterable) => {
-    let index = 0
+    let index = -1
     return {
         next() {
             return iterable[index + 1]

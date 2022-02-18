@@ -1,4 +1,5 @@
 const fs = require('fs')
+const lex = require('./lexer')
 
 /**
  * @type { string }
