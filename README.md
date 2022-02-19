@@ -4,6 +4,11 @@ An Experimental Language made in JS.
 ## How to run a `.wg` file
 ---
 
+Run the following commadn to setup for first time to download all dependencies
+```
+npm i
+```
+
 In the console type the following command after replacing the `filename` with the name of the file you are running.
 
 ```
