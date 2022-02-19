@@ -1,4 +1,8 @@
-let occy = 'bad'
+let occy = 'bad'    
 if occy == 'bad' {
     print('No he is not')
+    print(
+        'this', 'is',
+         'a', 'test'
+    )
 }

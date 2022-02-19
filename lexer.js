@@ -17,17 +17,17 @@ const char_map = {
     '\\': '\\'
 }
 
-/**
- * 
- * @returns { number }
- */
-const brackets_map_sum = () => {
-    let sum = 0
-    for (const i in brackets_map) {
-        sum += brackets_map[i]
-    }
-    return sum
-}
+// /**
+//  * 
+//  * @returns { number }
+//  */
+// const brackets_map_sum = () => {
+//     let sum = 0
+//     for (const i in brackets_map) {
+//         sum += brackets_map[i]
+//     }
+//     return sum
+// }
 
 let brackets_map_key = Object.keys(brackets_map)
 
@@ -148,7 +148,7 @@ const lex = (fileContent) => {
             }
             let prev = tokens[tokens.length - 1].value
 
-            if (!('({[.'.includes(next) || prev == '=' || brackets_map_sum())) {
+            if (!('({[.'.includes(next) || ',=({['.includes(prev))) {
                 tokens.push({ type: 'delim', value: ';' })
             }
         } else if (/[0-9]/.test(curr)) {
@@ -204,6 +204,8 @@ const lex = (fileContent) => {
         } else if ('[{()}]'.includes(curr)) {
             let type = brackets_map_key.find(i => i.includes(curr))
             tokens.push({ type: 'bracket', value: curr, depth: curr == type[0] ? brackets_map[type]++ : --brackets_map[type] })
+        } else if (';' == curr) {
+            tokens.push({ type: 'delim', value: curr })
         }
     }
 
