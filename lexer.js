@@ -36,10 +36,11 @@ let brackets_map_key = Object.keys(brackets_map)
  * 
  * @param { import("./iterator").IterableReturn } iterable 
  * @param { string } delim
+ * @param { string } [type='string']
  * 
- * @returns { { type: 'string', value: string } }
+ * @returns { { type: string, value: string } }
  */
-const parseString = (iterable, delim) => {
+const parseDelim = (iterable, delim, type = 'string') => {
     let ret = []
 
     let prev
@@ -62,7 +63,7 @@ const parseString = (iterable, delim) => {
     iterable.move()
     ret = ret.join('')
 
-    return { type: 'string', value: ret }
+    return { type: type, value: ret }
 }
 
 /**
@@ -156,7 +157,7 @@ const lex = (fileContent) => {
         } else if (/[#_a-zA-Z]/.test(curr)) {
             tokens.push(parseName(iter, curr))
         } else if ('"\'`'.includes(curr)) {
-            tokens.push(parseString(iter, curr))
+            tokens.push(parseDelim(iter, curr))
         } else if (curr == '.') {
             if (/[0-9]/.test(iter.next())) {
                 tokens.push(parseNum(iter, curr, true))
@@ -172,7 +173,7 @@ const lex = (fileContent) => {
             } else {
                 tokens.push({ type: 'symbol', value: '=' })
             }
-        } else if ('+/-*^~'.includes(curr)) {
+        } else if ('+-*^~'.includes(curr)) {
             if (iter.next() == '=') {
                 tokens.push({ type: 'assignment', value: curr + '=' })
                 iter.move()
@@ -206,10 +207,33 @@ const lex = (fileContent) => {
             tokens.push({ type: 'bracket', value: curr, depth: curr == type[0] ? brackets_map[type]++ : --brackets_map[type] })
         } else if (';' == curr) {
             tokens.push({ type: 'delim', value: curr })
+        } else if ('/' == curr) {
+            if (iter.next() == curr) {
+                while (iter.next() != '\n') {
+                    iter.move()
+                }
+                iter.move()
+            } else if (iter.next() == '*') {
+                while (true) {
+                    let curr = iter.next()
+                    if (!curr) {
+                        throwError()
+                    }
+                    iter.move()
+                    if (curr == '*' && iter.next() == '/') {
+                        break
+                    }
+                }
+                iter.move()
+            } else {
+                tokens.push({ type: 'operator', value: '/' })
+            }
         }
     }
 
-    if (tokens[tokens.length - 1].type != 'delim') tokens.push({ type: 'delim', value: ';' })
+    if(tokens.length) {
+        if (tokens[tokens.length - 1].type != 'delim') tokens.push({ type: 'delim', value: ';' })
+    }
     console.log(tokens)
 
     //parsing after each token is lexed to support hoisting

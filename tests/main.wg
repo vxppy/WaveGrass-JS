@@ -1,8 +1,4 @@
-let occy = 'bad'    
-if occy == 'bad' {
-    print('No he is not')
-    print(
-        'this', 'is',
-         'a', 'test'
-    )
-}
+// hello world
+/*
+i have made this work
+*/
