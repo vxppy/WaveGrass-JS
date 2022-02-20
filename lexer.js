@@ -1,4 +1,5 @@
 const iterator = require("./iterator")
+const parse = require("./parser")
 const throwError = require("./throwError")
 
 const keyword = [
@@ -8,7 +9,6 @@ const brackets_map = {
     '()': 0,
     '{}': 0,
     '[]': 0,
-    '<>': 0,
 }
 
 const char_map = {
@@ -147,9 +147,9 @@ const lex = (fileContent) => {
                 if (next != ' ') break
                 iter.move()
             }
-            let prev = tokens[tokens.length - 1].value
+            let prev = tokens[tokens.length - 1]
 
-            if (!('({[.'.includes(next) || ',=({['.includes(prev))) {
+            if (!('({[.'.includes(next) || ['assigment','brackets', 'operator', 'comparator'].includes(prev.type) || ',.'.includes(prev.value) || brackets_map['()'] || brackets_map['[]'])) {
                 tokens.push({ type: 'delim', value: ';' })
             }
         } else if (/[0-9]/.test(curr)) {
@@ -164,16 +164,16 @@ const lex = (fileContent) => {
             } else {
                 tokens.push({ type: 'symbol', value: '.' })
             }
-        } else if (':?!@,'.includes(curr)) {
+        } else if (':?@,'.includes(curr)) {
             tokens.push({ type: 'symbol', value: curr })
         } else if ('=' == curr) {
             if (iter.next() == '=') {
                 tokens.push({ type: 'comparator', value: '==' })
                 iter.move()
             } else {
-                tokens.push({ type: 'symbol', value: '=' })
+                tokens.push({ type: 'assignment', value: '=' })
             }
-        } else if ('+-*^~'.includes(curr)) {
+        } else if ('+*^~!'.includes(curr)) {
             if (iter.next() == '=') {
                 tokens.push({ type: 'assignment', value: curr + '=' })
                 iter.move()
@@ -228,16 +228,23 @@ const lex = (fileContent) => {
             } else {
                 tokens.push({ type: 'operator', value: '/' })
             }
+        } else if ('-' == curr) {
+            if (iter.next() == '>') {
+                iter.move()
+                tokens.push({ type: 'assignment', value: '->' })
+            } else {
+                tokens.push({ type: 'operator', value: curr })
+            }
         }
     }
 
-    if(tokens.length) {
+    if (tokens.length) {
         if (tokens[tokens.length - 1].type != 'delim') tokens.push({ type: 'delim', value: ';' })
     }
-    console.log(tokens)
+    // console.log(tokens)
 
     //parsing after each token is lexed to support hoisting
-
+    parse(tokens)
     return true
 }
 

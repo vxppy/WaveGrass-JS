@@ -7,8 +7,7 @@
  * @typedef {{ next: () => string | T,
  *  curr: () => string | T,
  *  move: () => string | T,
- *  prev: () => string | T,
- *  moveBack () => string | T }} IterableReturn 
+ *  prev: () => string | T }} IterableReturn 
  */
 
 /**
@@ -29,9 +28,6 @@ const iterator = (iterable) => {
         },
         prev() {
             return iterable[index - 1]
-        },
-        moveBack() {
-            return iterable[index--]
         }
     }
 }
