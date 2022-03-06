@@ -5,6 +5,14 @@ const throwError = require("./throwError")
  * @typedef { { type: string, value: string | number, depth?: number } } Token
  */
 
+const precedence = {
+    5: [ '(' ],
+    4: ['!'],
+    3: [ '*', '/'],
+    2: ['+', '-'],
+    1: ['&&', '||'],
+}
+
 
 /**
  * 
@@ -30,6 +38,39 @@ const accumulate_tokens = (iterable, endat) => {
     }
 
     return tokens
+}
+
+/**
+ * 
+ * @param { Token[] } array 
+ */
+const parse_operators = (array) => {
+    let oper = 4
+    while(oper) {
+        let i = 0
+        while(i < array.length) {
+            if(precedence[oper].includes(array[i].value)) {
+                if(array[i].value == '(') {
+
+                } else if(array[i].value == '!') {
+
+                } else {
+                    if(!array[i - 1]) {
+
+                    } else if (!array[i + 1]) {
+
+                    } else {
+                        array.splice(i - 1, 3, { operation: array[i], rhs: array[i - 1], lhs: array[i + 1]})
+                        i--
+                    }
+                }
+            }
+            i++
+        }
+        oper--
+    }
+
+    return array[0]
 }
 
 /**
@@ -83,7 +124,7 @@ const to_ast = (iterable, prev = null, endat) => {
     } else if (curr.type == 'assignment') {
         if (curr.value == '=') {
             if (!prev) throwError()
-            let next = accumulate_tokens(iterable, endat)
+            let next = parse_operators(accumulate_tokens(iterable, endat))
             return to_ast(iterable, { type: 'assignment', rhs: prev, lhs: next }, endat)
         } else if (curr.value == '->') {
             if (!prev) throwError()
@@ -91,10 +132,13 @@ const to_ast = (iterable, prev = null, endat) => {
             return to_ast(iterable, { type: 'assignment2', rhs: prev, lhs: next }, endat)
         }
     } else if (curr.type == 'bracket') {
-        if (curr.value == '(') {   
-            if (prev) {
                 let args = accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: curr.depth })
-                iterable.move()
+
+        if (curr.value == '(') {   
+            let args = accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: curr.depth })
+            iterable.move()
+
+            if (prev) {
                 return to_ast(iterable, { type: 'call', value: prev, args: parse_params(args, curr.depth) }, endat)
             }
         }
@@ -113,7 +157,7 @@ const parse = (tokens) => {
 
     while (iter.next()) {
         console.log(
-            to_ast(iter, null, { type: 'delim', value: ';' })
+            to_ast(iter, null, { type: 'delim', value: ';' }).lhs
             )
         iter.move()
     }
