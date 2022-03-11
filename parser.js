@@ -6,9 +6,9 @@ const throwError = require("./throwError")
  */
 
 const precedence = {
-    5: [ '(' ],
+    5: ['('],
     4: ['!'],
-    3: [ '*', '/'],
+    3: ['*', '/'],
     2: ['+', '-'],
     1: ['&&', '||'],
 }
@@ -45,22 +45,52 @@ const accumulate_tokens = (iterable, endat) => {
  * @param { Token[] } array 
  */
 const parse_operators = (array) => {
-    let oper = 4
-    while(oper) {
+    if(array.length == 0) {
+        return []
+    }
+    if(array.length == 1) {
+        return array[0]
+    }
+    let oper = 5
+    while (oper) {
         let i = 0
-        while(i < array.length) {
-            if(precedence[oper].includes(array[i].value)) {
-                if(array[i].value == '(') {
+        while (i < array.length) {
+            if (precedence[oper].includes(array[i].value)) {
+                if (array[i].value == '(') {
+                    for (let j = i + 1; j < array.length; j++) {
+                        if (array[j].value == ')' && array[j].depth == array[i].depth) {
+                            i2 = j
+                            break
+                        }
+                    }
+                    if (i2 == -1) {
 
-                } else if(array[i].value == '!') {
+                    }
+
+                    if (array?.[i - 1] && (array[i - 1]?.operation == 'brackets' || ['variable', 'number', 'string'].includes(array[i - 1].type))) {                        
+                        array.splice(i - 1, 3,
+                            {
+                                operation: 'call', variable: array[i - 1],
+                                params: parse_params(array.splice(i + 1, i2 - i - 1))
+                            })
+                        i--
+                    } else {
+                        array.splice(i, 2, {
+                            operation: 'brackets',
+                            value: parse_operators(array.splice(i + 1, i2 - i - 1))
+                        })
+                    }
+
+
+                } else if (array[i].value == '!') {
 
                 } else {
-                    if(!array[i - 1]) {
+                    if (!array[i - 1]) {
 
                     } else if (!array[i + 1]) {
 
                     } else {
-                        array.splice(i - 1, 3, { operation: array[i], rhs: array[i - 1], lhs: array[i + 1]})
+                        array.splice(i - 1, 3, { operation: array[i], rhs: array[i - 1], lhs: array[i + 1] })
                         i--
                     }
                 }
@@ -84,13 +114,13 @@ const parse_params = (tokens, depth) => {
     let i = 0;
     let new_depth = depth
     while (tokens.length) {
-        if(tokens[i].value == '(') {
+        if (tokens[i].value == '(') {
             new_depth++
-        } else if(tokens[i].value == ')') {
+        } else if (tokens[i].value == ')') {
             new_depth--
-        } else if(tokens[i].value == ',') {
-            if(new_depth == depth) {
-                params.push(tokens.splice(0, i))
+        } else if (tokens[i].value == ',') {
+            if (new_depth == depth) {
+                params.push(parse_operators(tokens.splice(0, i)))
                 tokens.shift()
             }
             i = -1
@@ -98,8 +128,8 @@ const parse_params = (tokens, depth) => {
 
         i++
 
-        if(tokens.length - 1 == i) {
-            params.push(tokens.splice(0, tokens.length))
+        if (tokens.length - 1 == i) {
+            params.push(parse_operators(tokens.splice(0, tokens.length)))
         }
     }
 
@@ -132,9 +162,9 @@ const to_ast = (iterable, prev = null, endat) => {
             return to_ast(iterable, { type: 'assignment2', rhs: prev, lhs: next }, endat)
         }
     } else if (curr.type == 'bracket') {
-                let args = accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: curr.depth })
+        let args = accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: curr.depth })
 
-        if (curr.value == '(') {   
+        if (curr.value == '(') {
             let args = accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: curr.depth })
             iterable.move()
 
@@ -143,8 +173,8 @@ const to_ast = (iterable, prev = null, endat) => {
             }
         }
     } else if (curr.type == 'keyword') {
-        if(curr.value == 'hoist') {
-            return to_ast(iterable, { type: 'hoist', value: to_ast(iterable, null, endat) }, endat)   
+        if (curr.value == 'hoist') {
+            return to_ast(iterable, { type: 'hoist', value: to_ast(iterable, null, endat) }, endat)
         }
     }
 }
@@ -157,8 +187,10 @@ const parse = (tokens) => {
 
     while (iter.next()) {
         console.log(
-            to_ast(iter, null, { type: 'delim', value: ';' }).lhs
-            )
+            // JSON.stringify(
+                to_ast(iter, null, { type: 'delim', value: ';' })
+                // , null, '\t').replace(/"(\w+)":/g, '$1:')
+        )
         iter.move()
     }
 }

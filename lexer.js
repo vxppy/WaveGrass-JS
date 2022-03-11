@@ -149,9 +149,10 @@ const lex = (fileContent) => {
             }
             let prev = tokens[tokens.length - 1]
 
-            if (!('({[.'.includes(next) || ['assigment','brackets', 'operator', 'comparator'].includes(prev.type) || ',.'.includes(prev.value) || brackets_map['()'] || brackets_map['[]'])) {
+            if (!('({[.'.includes(next) || ['assigment', 'brackets', 'operator', 'comparator'].includes(prev.type) || ',.'.includes(prev.value) || brackets_map['()'] || brackets_map['[]'])) {
                 tokens.push({ type: 'delim', value: ';' })
             }
+            
         } else if (/[0-9]/.test(curr)) {
             tokens.push(parseNum(iter, curr))
         } else if (/[#_a-zA-Z]/.test(curr)) {
@@ -173,13 +174,23 @@ const lex = (fileContent) => {
             } else {
                 tokens.push({ type: 'assignment', value: '=' })
             }
-        } else if ('+*^~!'.includes(curr)) {
+        } else if ('^~!'.includes(curr)) {
             if (iter.next() == '=') {
                 tokens.push({ type: 'assignment', value: curr + '=' })
                 iter.move()
             } else {
                 tokens.push({ type: 'operator', value: curr })
             }
+        } else if ('+*-'.includes(curr)) {
+            if (iter.next() == '=') {
+                tokens.push({ type: 'assignment', value: curr + '=' })
+                iter.move()
+            } else if (iter.next() == curr) {
+                tokens.push({ type: 'operator', value: curr + curr })
+                iter.move()
+            }
+            else
+                tokens.push({ type: 'operator', value: curr })
         } else if ('&|'.includes(curr)) {
             if (iter.next() == '=') {
                 tokens.push({ type: 'assignment', value: curr + '=' })
