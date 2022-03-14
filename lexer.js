@@ -48,7 +48,7 @@ const parseDelim = (iterable, delim, type = 'string') => {
         let curr = iterable.next()
 
         if (curr == delim) {
-            if (prev && prev != '\\') break
+            if (prev != '\\') break
             else ret.push(curr)
         }
 
@@ -141,18 +141,19 @@ const lex = (fileContent) => {
         iter.move()
 
         if (curr == '\n') {
-            let next = ' ';
-            while (next == ' ') {
-                next = iter.next()
-                if (next != ' ') break
-                iter.move()
+            if(tokens.length) {
+                let next = ' ';
+                while (next == ' ') {
+                    next = iter.next()
+                    if (next != ' ') break
+                    iter.move()
+                }
+                let prev = tokens[tokens.length - 1]
+    
+                if (!('({[.'.includes(next) || ['assigment', 'brackets', 'operator', 'comparator'].includes(prev.type) || ',.'.includes(prev.value) || brackets_map['()'] || brackets_map['[]'])) {
+                    tokens.push({ type: 'delim', value: ';' })
+                }
             }
-            let prev = tokens[tokens.length - 1]
-
-            if (!('({[.'.includes(next) || ['assigment', 'brackets', 'operator', 'comparator'].includes(prev.type) || ',.'.includes(prev.value) || brackets_map['()'] || brackets_map['[]'])) {
-                tokens.push({ type: 'delim', value: ';' })
-            }
-            
         } else if (/[0-9]/.test(curr)) {
             tokens.push(parseNum(iter, curr))
         } else if (/[#_a-zA-Z]/.test(curr)) {

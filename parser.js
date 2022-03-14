@@ -1,3 +1,4 @@
+const execute = require("./execute")
 const iterator = require("./iterator")
 const throwError = require("./throwError")
 
@@ -6,11 +7,13 @@ const throwError = require("./throwError")
  */
 
 const precedence = {
-    5: ['('],
-    4: ['!'],
-    3: ['*', '/'],
-    2: ['+', '-'],
-    1: ['&&', '||'],
+    7: [':', '='],
+    6: ['('],
+    5: ['!'],
+    4: ['*', '/'],
+    3: ['+', '-'],
+    2: ['==', '!='],
+    1: ['&&', '||']
 }
 
 
@@ -45,13 +48,13 @@ const accumulate_tokens = (iterable, endat) => {
  * @param { Token[] } array 
  */
 const parse_operators = (array) => {
-    if(array.length == 0) {
+    if (array.length == 0) {
         return []
     }
-    if(array.length == 1) {
+    if (array.length == 1) {
         return array[0]
     }
-    let oper = 5
+    let oper = 7
     while (oper) {
         let i = 0
         while (i < array.length) {
@@ -67,7 +70,7 @@ const parse_operators = (array) => {
 
                     }
 
-                    if (array?.[i - 1] && (array[i - 1]?.operation == 'brackets' || ['variable', 'number', 'string'].includes(array[i - 1].type))) {                        
+                    if (array?.[i - 1] && (array[i - 1]?.operation == 'brackets' || ['variable', 'number', 'string'].includes(array[i - 1].type))) {
                         array.splice(i - 1, 3,
                             {
                                 operation: 'call', variable: array[i - 1],
@@ -90,7 +93,7 @@ const parse_operators = (array) => {
                     } else if (!array[i + 1]) {
 
                     } else {
-                        array.splice(i - 1, 3, { operation: array[i], rhs: array[i - 1], lhs: array[i + 1] })
+                        array.splice(i - 1, 3, { operation: array[i], lhs: array[i - 1], rhs: array[i + 1] })
                         i--
                     }
                 }
@@ -128,7 +131,7 @@ const parse_params = (tokens, depth) => {
 
         i++
 
-        if (tokens.length - 1 == i) {
+        if (tokens.length - 1 <= i) {
             params.push(parse_operators(tokens.splice(0, tokens.length)))
         }
     }
@@ -155,17 +158,17 @@ const to_ast = (iterable, prev = null, endat) => {
         if (curr.value == '=') {
             if (!prev) throwError()
             let next = parse_operators(accumulate_tokens(iterable, endat))
-            return to_ast(iterable, { type: 'assignment', rhs: prev, lhs: next }, endat)
+            return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: next }, endat)
         } else if (curr.value == '->') {
             if (!prev) throwError()
             let next = accumulate_tokens(iterable, endat)
-            return to_ast(iterable, { type: 'assignment2', rhs: prev, lhs: next }, endat)
+            return to_ast(iterable, { type: 'assignment2', lhs: prev, rhs: next }, endat)
         }
     } else if (curr.type == 'bracket') {
         let args = accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: curr.depth })
 
         if (curr.value == '(') {
-            let args = accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: curr.depth })
+            // let args = accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: curr.depth })
             iterable.move()
 
             if (prev) {
@@ -176,6 +179,71 @@ const to_ast = (iterable, prev = null, endat) => {
         if (curr.value == 'hoist') {
             return to_ast(iterable, { type: 'hoist', value: to_ast(iterable, null, endat) }, endat)
         }
+
+        if (curr.value == 'if') {
+            let condition = parse_operators(accumulate_tokens(iterable, { type: 'bracket', value: '{', depth: 0 }))
+            iterable.move()
+
+            let tokens = accumulate_tokens(iterable, { type: 'bracket', value: '}', depth: 0 })
+            iterable.move()
+
+            let iter = iterator(tokens)
+            let block = []
+
+            while (iter.next()) {
+                let ast = to_ast(iter, null, endat)
+                if (ast) block.push(ast)
+                iter.move()
+            }
+
+            return to_ast(iterable, { type: 'if', condition: condition, positive: block }, endat)
+        }
+
+        if (curr.value == 'else') {
+            if (!prev) {
+                throwError()
+            } else if (prev.type != 'if') {
+                throwError()
+            }
+
+            if (!['{', 'if'].includes(iterable.next().value)) {
+                throwError()
+            }
+
+            let condition = false
+            if (iterable.next().value == 'if') {
+                iterable.move()
+                condition = parse_operators(accumulate_tokens(iterable, { type: 'bracket', value: '{', depth: 0 }))
+            }
+
+            iterable.move()
+
+            let tokens = accumulate_tokens(iterable, { type: 'bracket', value: '}', depth: 0 })
+            iterable.move()
+
+            let iter = iterator(tokens)
+            let block = []
+
+            while (iter.next()) {
+                let ast = to_ast(iter, null, endat)
+                if (ast) block.push(ast)
+                iter.move()
+            }
+
+            if (prev.negative) {
+                let p = prev.negative
+                while (true) {
+                    if (p.negative) p = p.negative
+                    else break
+                }
+
+                p.negative = condition ? { condition: condition, positive: block } : block
+                return to_ast(iterable, prev, endat)
+            } else {
+                return to_ast(iterable, { ...prev, negative: condition ? { condition: condition, positive: block } : block }, endat)
+
+            }
+        }
     }
 }
 /**
@@ -184,15 +252,14 @@ const to_ast = (iterable, prev = null, endat) => {
  */
 const parse = (tokens) => {
     let iter = iterator(tokens)
-
+    let asts = []
     while (iter.next()) {
-        console.log(
-            // JSON.stringify(
-                to_ast(iter, null, { type: 'delim', value: ';' })
-                // , null, '\t').replace(/"(\w+)":/g, '$1:')
-        )
+        asts.push(to_ast(iter, null, { type: 'delim', value: ';' }))
         iter.move()
     }
+    // let str = JSON.stringify(asts[0], null, '\t').replace(/"(\w+)":/g, '$1:')
+    // console.log(str.substring(1, str.length - 1).trim().replace(/^\t/mg, ''))
+    execute(asts)
 }
 
 module.exports = parse
