@@ -1,3 +1,2 @@
-if !a {
-    print('yo')
-}
+h = prompt('Hello?: ')
+print(h)

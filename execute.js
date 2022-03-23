@@ -1,4 +1,5 @@
 const throwError = require("./throwError")
+const input = require('./modules/input/main').input
 
 /**
  * @type { { [ scope: string ]: { map: Map, parent?: string }}}
@@ -13,6 +14,7 @@ const scopes = {
 let globalDepth = 3
 
 scopes['global'].map.set('print', { value: { 'variable': 'print' }, type: 'method', args: [], positional_args: ['end', 'sep'], catchgroups: ['nargs'], statements: ['<internal_print>'] })
+scopes['global'].map.set('prompt', { value: { 'variable': 'prompt' }, type: 'method', args: [], positional_args: ['color'], catchgroups: ['nargs'], statements: ['<internal_prompt>'] })
 
 const toString = async (tokens, sep, scope, depth = 0) => {
     let str = []
@@ -69,7 +71,7 @@ const to_truth_value = (value, scope) => {
  * @returns { Promise<{type: 'boolean', value: boolean}> }
  */
 const conditional_check = async (condition, scope) => {
-    
+
     if (condition.operation?.value == '!') {
         return await operate(condition, scope)
     }
@@ -137,7 +139,12 @@ const conditional_check = async (condition, scope) => {
         }
     }
 }
-const operate = async (ast, scope) => {
+const operate = async (ast, scope, depth = 0) => {
+    
+    if (ast.type == 'call') {
+        return await run(ast, scope, depth)
+    }
+
     if (ast.operation == 'brackets') {
         return await operate(ast.value)
     }
@@ -151,21 +158,22 @@ const operate = async (ast, scope) => {
         value.value = !value.value
         return value
     }
+    // console.log(ast)
 
     if (ast.lhs.operation) {
-        ast.lhs = await operate(ast.lhs, scope)
+        ast.lhs = await operate(ast.lhs, scope, depth)
     }
 
     if (ast.rhs.operation) {
-        ast.rhs = await operate(ast.rhs, scope)
+        ast.rhs = await operate(ast.rhs, scope, depth)
     }
 
     if (ast.lhs.type == 'variable') {
-        ast.lhs = getValueOfVariable(ast.lhs, scope)
+        ast.lhs = getValueOfVariable(ast.lhs, scope, depth)
     }
 
     if (ast.rhs.type == 'variable') {
-        ast.rhs = getValueOfVariable(ast.rhs, scope)
+        ast.rhs = getValueOfVariable(ast.rhs, scope, depth)
     }
 
     if (ast.operation.value == '+') {
@@ -251,6 +259,21 @@ const getValueOfVariable = (v, scope) => {
     return value ?? { type: 'nf' }
 }
 
+/**
+ * 
+ * @param { { type: 'variable', value: string } } v 
+ * @param { string } scope 
+ * @returns { string }
+ */
+const find_variable_scope = (v, scope) => {
+    let s = scope
+    while (s) {
+        if (!scopes[s].map.get(v.value)) s = scopes[s].parent
+        else break
+    }
+    return s
+}
+
 const parse_params = async (tokens, scope) => {
     const params = []
     const positional_args = {}
@@ -287,17 +310,24 @@ const parse_params = async (tokens, scope) => {
 
 const run = async (ast, scope, depth_value = 0) => {
     if (ast.type == 'assignment') {
+        let scp = find_variable_scope(ast.lhs, scope)
         if (ast.rhs.operation) {
-            scopes[scope].map.set(ast.lhs.value, await operate(ast.rhs, scope))
+            if(!scp) scopes[scope].map.set(ast.lhs.value, await operate(ast.rhs, scope))
+            else scopes[scp].map.set(ast.lhs.value, await operate(ast.rhs, scope))
         } else
             if (ast.rhs.type == 'variable') {
                 let value = getValueOfVariable(ast.rhs, scope)
                 if (value.type == 'nf') {
                     throwError()
                 }
-                scopes[scope].map.set(ast.lhs.value, JSON.parse(JSON.stringify(value)))
-            } else {
-                scopes[scope].map.set(ast.lhs.value, ast.rhs)
+                if(!scp) scopes[scope].map.set(ast.lhs.value, JSON.parse(JSON.stringify(value)))
+                else scopes[scp].map.set(ast.lhs.value, JSON.parse(JSON.stringify(value)))
+            } else if (ast.rhs.type == 'call') {
+                if(!scp) scopes[scope].map.set(ast.lhs.value, await run(ast.rhs, scope, depth_value))
+                else scopes[scp].map.set(ast.lhs.value, JSON.parse(JSON.stringify(value)))
+            } else { 
+                if(!scp) scopes[scope].map.set(ast.lhs.value, ast.rhs)
+                else scopes[scp].map.set(ast.lhs.value, ast.rhs)
             }
     } else if (ast.type == 'call') {
         const func = getValueOfVariable(ast.value, scope)
@@ -308,6 +338,7 @@ const run = async (ast, scope, depth_value = 0) => {
             throwError()
         }
 
+
         let args = await parse_params(ast.args, scope)
         let positional_args = args.positional_args
         let params = args.params
@@ -316,6 +347,11 @@ const run = async (ast, scope, depth_value = 0) => {
             let sep = positional_args.sep?.value ?? ' '
             let end = positional_args.end?.value ?? '\n'
             process.stdout.write(`${await toString(params, sep, scope)}${end}`)
+            return { type: 'null', value: 'null' }
+
+        } else if (func.statements[0] == '<internal_prompt>') {
+            // let color = 'white'
+            return { type: 'string', value: await input(await toString(params, '', scope)) }
 
         }
     } else if (ast.type == 'if') {

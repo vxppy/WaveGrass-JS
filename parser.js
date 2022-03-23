@@ -73,8 +73,8 @@ const parse_operators = (array) => {
                     if (array?.[i - 1] && (array[i - 1]?.operation == 'brackets' || ['variable', 'number', 'string'].includes(array[i - 1].type))) {
                         array.splice(i - 1, 3,
                             {
-                                operation: 'call', variable: array[i - 1],
-                                params: parse_params(array.splice(i + 1, i2 - i - 1))
+                                type: 'call', value: array[i - 1],
+                                args: parse_params(array.splice(i + 1, i2 - i - 1))
                             })
                         i--
                     } else {
