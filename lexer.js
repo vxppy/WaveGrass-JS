@@ -209,10 +209,13 @@ const lex = (fileContent) => {
             }
         } else if ('<>'.includes(curr)) {
             if (iter.next() == curr) {
-                tokens.push({ type: 'operator', value: curr })
+                tokens.push({ type: 'operator', value: curr + curr})
+                iter.move()
+            } else if (iter.next() == '=') {
+                tokens.push({ type: 'comparator', value: curr + '=' })
                 iter.move()
             } else {
-                tokens.push({ type: 'operator', value: curr })
+                tokens.push({ type: 'comparator', value: curr })
             }
         } else if ('[{()}]'.includes(curr)) {
             let type = brackets_map_key.find(i => i.includes(curr))
@@ -220,7 +223,11 @@ const lex = (fileContent) => {
         } else if (';' == curr) {
             tokens.push({ type: 'delim', value: curr })
         } else if ('/' == curr) {
-            if (iter.next() == curr) {
+            if (iter.next() == '=') {
+                tokens.push({ type: 'assignment', value: curr + curr + '=' })
+                iter.move()
+            }
+            else if (iter.next() == curr) {
                 while (iter.next() != '\n') {
                     iter.move()
                 }
