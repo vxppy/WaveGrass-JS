@@ -1,2 +1,2 @@
-h = prompt('Hello?: ')
+h = prompt('Hello there') + prompt('Why not?')
 print(h)

@@ -140,11 +140,6 @@ const conditional_check = async (condition, scope) => {
     }
 }
 const operate = async (ast, scope, depth = 0) => {
-    
-    if (ast.type == 'call') {
-        return await run(ast, scope, depth)
-    }
-
     if (ast.operation == 'brackets') {
         return await operate(ast.value)
     }
@@ -174,6 +169,14 @@ const operate = async (ast, scope, depth = 0) => {
 
     if (ast.rhs.type == 'variable') {
         ast.rhs = getValueOfVariable(ast.rhs, scope, depth)
+    }
+
+    if(ast.lhs.type == 'call') {
+        ast.lhs = await run(ast.lhs, scope, depth)
+    }
+
+    if(ast.rhs.type == 'call') {
+        ast.rhs = await run(ast.rhs, scope, depth)
     }
 
     if (ast.operation.value == '+') {
@@ -350,7 +353,6 @@ const run = async (ast, scope, depth_value = 0) => {
             return { type: 'null', value: 'null' }
 
         } else if (func.statements[0] == '<internal_prompt>') {
-            // let color = 'white'
             return { type: 'string', value: await input(await toString(params, '', scope)) }
 
         }
