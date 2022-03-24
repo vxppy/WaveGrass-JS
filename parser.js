@@ -3,12 +3,13 @@ const iterator = require("./iterator")
 const throwError = require("./throwError")
 
 /**
- * @typedef { { type: string, value: string | number, depth?: number } } Token
+ * @typedef { { type: string, value: string | number, depth?: number, line: number, col: number } } Token
  */
 
 const precedence = {
-    7: [':', '='],
-    6: ['(', '['],
+    8: [':', '='],
+    7: ['(', '['],
+    6: ['**', '++', '--'],
     5: ['!'],
     4: ['*', '/'],
     3: ['+', '-'],
@@ -24,7 +25,7 @@ const precedence = {
  * 
  * @returns { Token[] }
  */
-const accumulate_tokens = (iterable, endat, depth) => {
+const accumulate_tokens = (iterable, endat) => {
     let tokens = []
     if (endat.depth !== null) while (iterable.next()) {
 
@@ -47,14 +48,14 @@ const accumulate_tokens = (iterable, endat, depth) => {
  * 
  * @param { Token[] } array 
  */
-const parse_operators = (array) => {
+const parse_operators = (array, filedata) => {
     if (array.length == 0) {
         return []
     }
     if (array.length == 1) {
         return array[0]
     }
-    let oper = 7
+    let oper = 8
     while (oper) {
         let i = 0
         while (i < array.length) {
@@ -67,20 +68,20 @@ const parse_operators = (array) => {
                         }
                     }
                     if (i2 == -1) {
-
+                        throwError('EOF Error', filedata, array[i].line, array[i].col)
                     }
 
                     if (array?.[i - 1] && (array[i - 1]?.operation == 'brackets' || ['variable', 'number', 'string'].includes(array[i - 1].type))) {
                         array.splice(i - 1, 3,
                             {
                                 type: 'call', value: array[i - 1],
-                                args: parse_params(array.splice(i + 1, i2 - i - 1))
+                                args: parse_params(array.splice(i + 1, i2 - i - 1), filedata)
                             })
                         i--
                     } else {
                         array.splice(i, 2, {
                             operation: 'brackets',
-                            value: parse_operators(array.splice(i + 1, i2 - i - 1))
+                            value: parse_operators(array.splice(i + 1, i2 - i - 1), filedata)
                         })
                     }
                 } else if (array[i].value == '[') {
@@ -96,11 +97,11 @@ const parse_operators = (array) => {
 
                     array.splice(i, 2, {
                         type: 'array',
-                        values: parse_array(array.splice(i + 1, i2 - i - 1))
+                        values: parse_array(array.splice(i + 1, i2 - i - 1), filedata)
                     })
 
                 } else if (array[i].value == '!') {
-                    if(array[i + 1].value == '(') {
+                    if (array[i + 1].value == '(') {
                         for (let j = i + 2; j < array.length; j++) {
                             if (array[j].value == ')' && array[j].depth == array[i].depth) {
                                 i2 = j
@@ -108,29 +109,38 @@ const parse_operators = (array) => {
                             }
                         }
                         if (i2 == -1) {
-
+                            throwError('EOF Error', filedata, array[i].line, array[i].col)
                         }
                         if (array?.[i - 1] && (array[i - 1]?.operation == 'brackets' || ['variable', 'number', 'string'].includes(array[i - 1].type))) {
                             array.splice(i - 1, 3,
                                 {
-                                    operation: 'call', variable: array[i - 1],
-                                    params: parse_params(array.splice(i + 1, i2 - i - 1))
+                                    type: 'call', value: array[i - 1],
+                                    args: parse_params(array.splice(i + 1, i2 - i - 1), filedata)
                                 })
                             i--
                         } else {
                             array.splice(i + 1, 2, {
                                 operation: 'brackets',
-                                value: parse_operators(array.splice(i + 1, i2 - i - 1))
+                                value: parse_operators(array.splice(i + 1, i2 - i - 1), filedata)
                             })
                         }
-                        array.slice(i, 2, { operation: array[i], value: array[i + 1]})
-                    } else array.splice(i, 2, { operation: array[i], value: array[i + 1]})
+                        array.slice(i, 2, { operation: array[i], value: array[i + 1] })
+                    } else array.splice(i, 2, { operation: array[i], value: array[i + 1] })
                     i--
+                } else if (array[i].value == '++') {
+
+                    if (array[i - 1]?.type == 'variable') {
+                        array.splice(i - 1, 2,
+                            { type: 'assignment', lhs: array[i - 1], rhs: { operation: { type: 'operator', value: '+' }, lhs: array[i - 1], rhs: { type: 'number', value: 1 } } }
+                        )
+                        i--
+                    }
                 } else {
-                    if (!array[i - 1]) {
-
+                    // console.log(array, !array[i - 1], array[i - 1]?.type == 'operation')
+                    if (!array[i - 1] || array[i - 1].type == 'operation') {
+                        // console.log(array)
+                        // array.splice(i - 1, i, )
                     } else if (!array[i + 1]) {
-
                     } else {
                         array.splice(i - 1, 3, { operation: array[i], lhs: array[i - 1], rhs: array[i + 1] })
                         i--
@@ -151,7 +161,7 @@ const parse_operators = (array) => {
  * @param { number } depth 
  * @returns  { Token[] }
  */
-const parse_params = (tokens) => {
+const parse_params = (tokens, filedata) => {
     let params = []
     let i = 0;
     while (tokens.length) {
@@ -164,43 +174,43 @@ const parse_params = (tokens) => {
                 }
             }
             if (i2 == -1) {
-
+                throwError('EOF Error', filedata, params[0].line, params[0].col)
             }
 
             if (tokens?.[i - 1] && (tokens[i - 1]?.operation == 'brackets' || ['variable', 'number', 'string'].includes(tokens[i - 1].type))) {
                 tokens.splice(i - 1, 3,
                     {
                         operation: 'call', variable: tokens[i - 1],
-                        params: parse_params(tokens.splice(i + 1, i2 - i - 1))
+                        params: parse_params(tokens.splice(i + 1, i2 - i - 1), filedata)
                     })
                 i--
             } else {
                 tokens.splice(i, 2, {
                     operation: 'brackets',
-                    value: parse_operators(tokens.splice(i + 1, i2 - i - 1))
+                    value: parse_operators(tokens.splice(i + 1, i2 - i - 1), filedata)
                 })
             }
             params.push(tokens.shift())
             i = 0
         } else if (tokens[i].value == ',') {
-            params.push(parse_operators(tokens.splice(0, i)))
+            params.push(parse_operators(tokens.splice(0, i), filedata))
             tokens.shift()
             i = 0
         }
 
         i++
 
-        if(!tokens.length) break
+        if (!tokens.length) break
 
         if (tokens.length - 1 <= i) {
-            params.push(parse_operators(tokens.splice(0, tokens.length)))
+            params.push(parse_operators(tokens.splice(0, tokens.length), filedata))
         }
     }
 
     return params
 }
 
-const parse_array = (tokens) => {
+const parse_array = (tokens, filedata) => {
     let params = []
     let i = 0;
     while (tokens.length) {
@@ -213,27 +223,27 @@ const parse_array = (tokens) => {
                 }
             }
             if (i2 == -1) {
-
+                throwError('EOF Error', filedata, params[0].line, params[0].col)
             }
 
             tokens.splice(i, 2, {
                 type: 'array',
-                values: parse_array(tokens.splice(i + 1, i2 - i - 1))
+                values: parse_array(tokens.splice(i + 1, i2 - i - 1), filedata)
             })
 
             params.push(tokens.shift())
             i = -1
-        
+
         } else if (tokens[i].value == ',') {
-            params.push(parse_operators(tokens.splice(0, i)))
+            params.push(parse_operators(tokens.splice(0, i), filedata))
             tokens.shift()
             i = -1
         }
 
         i++
-        if(tokens.length) {
+        if (tokens.length) {
             if (tokens.length - 1 <= i) {
-                params.push(parse_operators(tokens.splice(0, tokens.length)))
+                params.push(parse_operators(tokens.splice(0, tokens.length), filedata))
             }
         }
 
@@ -250,42 +260,40 @@ const parse_array = (tokens) => {
  * @param { ?Token } prev 
  * @param { Token } endat
  */
-const to_ast = (iterable, prev = null, endat, depth = 0) => {
+const to_ast = (iterable, prev = null, endat, depth = 0, filedata) => {
     let curr = iterable.next()
     if (!curr || (curr.type == endat.type && curr.value == endat.value)) return prev
     iterable.move()
 
     if (['variable', 'number', 'string', 'boolean'].includes(curr.type)) {
         if (!prev) {
-            return to_ast(iterable, { type: curr.type, value: curr.value }, endat, depth)
+            return to_ast(iterable, { type: curr.type, value: curr.value }, endat, depth, filedata)
         }
     } else if (curr.type == 'assignment') {
-        if(!prev) throwError()
+        if (!prev) throwError()
         if (curr.value == '=') {
-            let next = parse_operators(accumulate_tokens(iterable, endat, depth))
-            return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: next }, endat, depth)
+            let next = parse_operators(accumulate_tokens(iterable, endat), filedata)
+            return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: next }, endat, depth, filedata)
         } else if (curr.value == '->') {
-            let next = accumulate_tokens(iterable, endat, depth)
-            return to_ast(iterable, { type: 'assignment2', lhs: prev, rhs: next }, endat, depth)
+            let next = accumulate_tokens(iterable, endat, filedata)
+            return to_ast(iterable, { type: 'assignment2', lhs: prev, rhs: next }, endat, depth, filedata)
         } else {
-            let next = parse_operators(accumulate_tokens(iterable, endat, depth))
-            return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { operation: { type: 'operator', value: curr.value[0] }, lhs: prev, rhs: next } }, endat, depth)
+            let next = parse_operators(accumulate_tokens(iterable, endat), filedata)
+            return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { operation: { type: 'operator', value: curr.value[0] }, lhs: prev, rhs: next } }, endat, depth, filedata)
         }
     } else if (curr.type == 'bracket') {
         let args = accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: curr.depth })
         if (curr.value == '(') {
             iterable.move()
             if (prev) {
-                return to_ast(iterable, { type: 'call', value: prev, args: parse_params(args, curr.depth) }, endat, depth)
+                return to_ast(iterable, { type: 'call', value: prev, args: parse_params(args, curr.depth, filedata) }, endat, depth, filedata)
             }
         }
     } else if (curr.type == 'keyword') {
         if (curr.value == 'hoist') {
-            return to_ast(iterable, { type: 'hoist', value: to_ast(iterable, null, endat, depth) }, endat, depth)
-        }
-
-        if (curr.value == 'if') {
-            let condition = parse_operators(accumulate_tokens(iterable, { type: 'bracket', value: '{', depth: depth }))
+            return to_ast(iterable, { type: 'hoist', value: to_ast(iterable, null, endat, depth, filedata) }, endat, depth, filedata)
+        } else if (curr.value == 'if') {
+            let condition = parse_operators(accumulate_tokens(iterable, { type: 'bracket', value: '{', depth: depth }), filedata)
             iterable.move()
 
             let tokens = accumulate_tokens(iterable, { type: 'bracket', value: '}', depth: depth })
@@ -294,15 +302,13 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
             let iter = iterator(tokens)
             let block = []
             while (iter.next()) {
-                let ast = to_ast(iter, null, endat, depth + 1)
+                let ast = to_ast(iter, null, endat, depth + 1, filedata)
                 if (ast) block.push(ast)
                 iter.move()
             }
 
-            return to_ast(iterable, { type: 'if', condition: condition, positive: block }, endat, depth)
-        }
-
-        if (curr.value == 'else') {
+            return to_ast(iterable, { type: 'if', condition: condition, positive: block }, endat, depth, filedata)
+        } else if (curr.value == 'else') {
             if (!prev) {
                 throwError()
             } else if (prev.type != 'if') {
@@ -316,7 +322,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
             let condition = false
             if (iterable.next().value == 'if') {
                 iterable.move()
-                condition = parse_operators(accumulate_tokens(iterable, { type: 'bracket', value: '{', depth: depth}))
+                condition = parse_operators(accumulate_tokens(iterable, { type: 'bracket', value: '{', depth: depth }), filedata)
             }
 
             iterable.move()
@@ -329,7 +335,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
             let block = []
 
             while (iter.next()) {
-                let ast = to_ast(iter, null, endat, depth + 1)
+                let ast = to_ast(iter, null, endat, depth + 1, filedata)
                 if (ast) block.push(ast)
                 iter.move()
             }
@@ -342,27 +348,50 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
                 }
 
                 p.negative = condition ? { condition: condition, positive: block } : block
-                return to_ast(iterable, prev, endat, depth)
+                return to_ast(iterable, prev, endat, depth, filedata)
             } else {
-                return to_ast(iterable, { ...prev, negative: condition ? { type: 'if', condition: condition, positive: block } : block }, endat, depth)
+                return to_ast(iterable, { ...prev, negative: condition ? { type: 'if', condition: condition, positive: block } : block }, endat, depth, filedata)
 
+            }
+        } else if (curr.value == 'while') {
+            let condition = parse_operators(accumulate_tokens(iterable, { type: 'bracket', value: '{', depth: depth }), filedata)
+            iterable.move()
+
+            let tokens = accumulate_tokens(iterable, { type: 'bracket', value: '}', depth: depth })
+            iterable.move()
+
+            let iter = iterator(tokens)
+            let block = []
+            while (iter.next()) {
+                let ast = to_ast(iter, null, endat, depth + 1, filedata)
+                if (ast) block.push(ast)
+                iter.move()
+            }
+            return to_ast(iterable, { type: 'while', condition: condition, block: block }, endat, depth, filedata)
+        }
+    } else if (curr.type == 'operator') {
+        // if(!prev) thr
+        if (curr.value == '++') {
+            if (prev) {
+                return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { operation: { type: 'operator', value: '+' }, lhs: prev, rhs: { type: 'number', value: 1 } } }, endat, depth, filedata)
             }
         }
     }
 }
 /**
  * 
- * @param { Token[] } tokens 
+ * @param { { tokens: Token[], filedata: { lines: string[], name: string } } tokens 
  */
 const parse = (tokens) => {
-    let iter = iterator(tokens)
+    let iter = iterator(tokens.tokens)
     let asts = []
     while (iter.next()) {
-        asts.push(to_ast(iter, null, { type: 'delim', value: ';' }))
+        let value = to_ast(iter, null, { type: 'delim', value: ';' }, 0, tokens.filedata)
+        if (value) asts.push(value)
         iter.move()
     }
+    execute({ asts: asts, filedata: tokens.filedata })
 
-    execute(asts)
 }
 
 module.exports = parse

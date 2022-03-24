@@ -1,2 +1,1 @@
-h = prompt('Hello there') + prompt('Why not?')
-print(h)
+print('Hello, world!')

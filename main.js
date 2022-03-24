@@ -19,7 +19,7 @@ if(!file.endsWith('.wg')) {
 
 if(fs.existsSync(`./tests/${file}`)) {
     const readAble = fs.readFileSync(`./tests/${file}`, 'utf-8')
-    lex(readAble)
+    lex(readAble, file)
 } else {
     console.log('\nFile not found. Make sure it is in the tests folder with \x1b[1m.wg\x1b[0m extension\n')
 }
