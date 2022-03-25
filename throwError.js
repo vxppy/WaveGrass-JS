@@ -1,13 +1,12 @@
-const throwError = (message, filedata, line, col) => {
+const throwError = (name, message, filedata, line, col) => {
     if (!message) {
-        process.stdout.write(`Error`)
-        process.exit(1)
+        throw new Error()
     }
 
     process.stdout.write(`${line} | ${filedata.lines[line - 1]}
-${' '.repeat(col + line.toString().length + '| '.length)}^
-${message}
-\tat ${filedata.file}`)
+${' '.repeat(col + (line.toString() + '| ').length)}^
+${name}: ${message}
+\t\x1b[38;5;8mat ${filedata.file}\x1b[0m`)
 process.exit(1)
 }
 

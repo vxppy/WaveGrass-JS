@@ -3,8 +3,13 @@ const throwError = require("./throwError")
 class WaveGrassObject {
 
     constructor(value) {
-        this.value = value
-        this.type = 'Object'
+        this.__value = value
+        this.__type = 'Object'
+        this.__properties = {
+            toString: this.__string__
+        }
+
+        this.__mutable = false
     }
 
     __string__ = () => {
@@ -16,7 +21,7 @@ class WaveGrassObject {
     }
 
     __value_of__ = () => {
-        return this.value
+        return this.__value
     }
 
     __class__ = () => {
@@ -28,7 +33,7 @@ class WaveGrassObject {
     }
 
     __type__ = () => {
-        return this.type
+        return this.__type
     }
 
     /**
@@ -53,7 +58,15 @@ class WaveGrassObject {
 
     __div__ = rval => { }
 
-    __r_div = rval => { }
+    __r_div__ = rval => { }
+
+    __expo__ = rval => { }
+
+    __r_expo__ = rval => { }
+
+    __mod__ = rval => { }
+
+    __r_mod__ = rval => { }
 
     __negate__ = () => { }
 
@@ -71,21 +84,35 @@ class WaveGrassObject {
 
     __b_and__ = rval => { }
 
+    __r_b_and__ = rval => { }
+
     __b_or__ = rval => { }
+    
+    __r_b_or__ = rval => { }
 
     __b_xor__ = rval => { }
+
+    __r_b_xor__ = rval => { }
 
     __b_not__ = rval => { }
 
     __b_l_shift__ = rval => { }
 
+    __r_b_l_shift__ = rval => { }
+
     __b_r_s_shift__ = rval => { }
+
+    __r_b_r_s_shift__ = rval => { }
 
     __b_r_us_shift = rval => { }
 
+    __r_b_r_us_shift__ = rval => { }
+
     __iterator__ = rval => { }
 
-    __get_property__ = name => { }
+    __get_property__ = name => { 
+        return this.__properties[name]
+    }
 
     __set_property__ = (name, value) => { }
 }
@@ -96,7 +123,13 @@ class WaveGrassNumber extends WaveGrassObject {
 
     constructor(value) {
         super(value)
-        this.type = 'number'
+        this.__type = 'number'
+
+        this.__properties = {
+            toString: () => {}
+        }
+
+        this.__mutable = false
     }
 
     __string__ = () => {
@@ -104,7 +137,7 @@ class WaveGrassNumber extends WaveGrassObject {
     }
 
     __add__ = rval => {
-        if (rval.type == 'number') {
+        if (rval.__type__() == 'number') {
             return new WaveGrassNumber(this.__value_of__() + rval.__value_of__())
         } else return new WaveGrassError(`Cannot add a ${rval.__class__()} and <class number>`)
     }
@@ -114,19 +147,19 @@ class WaveGrassNumber extends WaveGrassObject {
     }
 
     __sub__ = rval => {
-        if (rval.type == 'number') {
+        if (rval.__type__() == 'number') {
             return new WaveGrassNumber(this.__value_of__() - rval.__value_of__())
         } else return new WaveGrassError(`Cannot subract a ${rval.__class__()} and <class number>`)
     }
 
     __r_sub__ = rval => {
-        if (rval.type == 'number') {
+        if (rval.__type__() == 'number') {
             return new WaveGrassNumber(rval.__value_of__() - this.__value_of__())
         } else return new WaveGrassError(`Cannot subtract a ${rval.__class__()} and <class number>`)
     }
 
     __mul__ = rval => {
-        if (rval.type == 'number') {
+        if (rval.__type__() == 'number') {
             return new WaveGrassNumber(this.__value_of__() * rval.__value_of__())
         } else return new WaveGrassError(`Cannot multiply a ${rval.__class__()} and <class number>`)
     }
@@ -137,13 +170,13 @@ class WaveGrassNumber extends WaveGrassObject {
 
 
     __div__ = rval => {
-        if (rval.type == 'number') {
+        if (rval.__type__() == 'number') {
             return new WaveGrassNumber(this.__value_of__() / rval.__value_of__())
         } else return new WaveGrassError(`Cannot subract a ${rval.__class__()} and <class number>`)
     }
 
     __r_div__ = rval => {
-        if (rval.type == 'number') {
+        if (rval.__type__() == 'number') {
             return new WaveGrassNumber(rval.__value_of__() / this.__value_of__())
         } else return new WaveGrassError(`Cannot subtract a ${rval.__class__()} and <class number>`)
     }
@@ -173,8 +206,12 @@ class WaveGrassNumber extends WaveGrassObject {
     }
 
     __bool__ = () => {
-        if (this.value == 0) return new WaveGrassBoolean(false)
+        if (this.__value == 0) return new WaveGrassBoolean(false)
         else return new WaveGrassBoolean(true)
+    }
+
+    __mod__ = rval => {
+        return new WaveGrassNumber(this.__value_of__() % rval.__value_of__())
     }
 
     static parseInt = (n, radix = 10) => {
@@ -185,7 +222,9 @@ class WaveGrassNumber extends WaveGrassObject {
 class WaveGrassString extends WaveGrassObject {
     constructor(value) {
         super(value)
-        this.type = 'string'
+        this.__type = 'string'
+
+        this.__mutable = false
     }
 
     __string__ = () => {
@@ -209,8 +248,17 @@ class WaveGrassString extends WaveGrassObject {
     }
 
     __bool__ = () => {
-        if (this.value == '') return new WaveGrassBoolean(false)
+        if (this.__value == '') return new WaveGrassBoolean(false)
         else return new WaveGrassBoolean(true)
+    }
+
+    __iterator__ = () => {
+        let index = 0
+        return {
+            next: () => { 
+                return { char: new WaveGrassString(this.__value[index]), index: new WaveGrassNumber(index++), finished: index == this.__value.length }
+            }
+        }
     }
 
 }
@@ -220,13 +268,31 @@ class WaveGrassArray extends WaveGrassObject {
 }
 
 class WaveGrassFunction extends WaveGrassObject {
+    constructor(name, args, statements, internal = false) {
+        super(`[Function ${name}]`)
+        this.__type = 'method'
 
+        this.__name = name
+        this.__args = args
+        this.__statements = statements
+        this.__is_internal = internal
+    }
+
+    __get_args__ = () => {
+        return this.__args
+    }
+
+    __get_statements__ = () => this.__statements
+    
+    __internal__ = () => this.__is_internal
 }
 
 class WaveGrassBoolean extends WaveGrassObject {
     constructor(value) {
         super(value)
-        this.type == 'boolean'
+        this.__type == 'boolean'
+
+        this.__mutable = false
     }
 
     __bool__ = () => {
@@ -237,12 +303,21 @@ class WaveGrassBoolean extends WaveGrassObject {
 class WaveGrassError extends WaveGrassObject {
     constructor(message) {
         super(message)
-        this.type = 'error'
+        this.__type = 'error'
     }
 
     static isError(value) {
         return value.constructor == WaveGrassError
     }
+}
+
+class WaveGrassNull extends WaveGrassObject {
+    constructor() {
+        super(null)
+        this.__type = null
+    }
+
+    __bool__ = () => new WaveGrassBoolean(false)
 }
 
 const getClassFromType = (obj) => {
@@ -253,12 +328,19 @@ const getClassFromType = (obj) => {
     else if (obj == 'boolean') return WaveGrassBoolean
 
 }
-const createObject = (type, value) => {
+const createObject = (type, ...extra) => {
     if (['number', 'string', 'method', 'array'].includes(type)) {
-        return new (getClassFromType(type))(value)
+        return new (getClassFromType(type))(...extra)
     }
 }
 
+const print = new WaveGrassFunction('print', ['*nargs', 'sep', 'end'], '<internal_print>', true)
+const prompt = new WaveGrassFunction('prompt', ['prompt'], '<internal_prompt>', true)
+
 module.exports = {
-    WaveGrassObject, WaveGrassNumber, WaveGrassString, WaveGrassArray, WaveGrassBoolean, WaveGrassError, createObject
+    WaveGrassObject, WaveGrassNumber, WaveGrassString, 
+    WaveGrassArray, WaveGrassBoolean, WaveGrassError,
+    WaveGrassFunction, WaveGrassNull,
+    createObject,
+    print, prompt
 }

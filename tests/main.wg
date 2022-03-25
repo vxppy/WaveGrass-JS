@@ -1,1 +1,5 @@
-print('Hello, world!')
+define add_to_numbers (a, b) {
+    return a + b
+}
+
+print(add_to_numbers(1, 2))

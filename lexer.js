@@ -65,7 +65,7 @@ const parseDelim = (iterable, delim, type = 'string', line, col, filedata) => {
     }
 
     if(!iterable.next()) {
-        throwError('EOF Error: Unexpected end of file', filedata, line, col)
+        throwError('EOF Error', 'Unexpected end of file', filedata, line, col)
     }
     // console.log(iterable.next())
 
@@ -96,7 +96,7 @@ const parseNum = (iterable, current, dot = false, line, col, filedata) => {
 
         if (dot) {
             if (curr == '.') {
-                throwError('Syntax Error: Unexpected property accessor', filedata, line, col)
+                throwError('Syntax Error', 'Unexpected property accessor', filedata, line, col)
             }
         } else {
             if (curr == '.') dot = true
@@ -128,7 +128,7 @@ const parseName = (iterable, current, line, col) => {
         let curr = iterable.next()
         change++
 
-        if (!/[a-zA-Z0-9]/.test(curr)) break
+        if (!/[_a-zA-Z0-9]/.test(curr)) break
 
         ret.push(curr)
         iterable.move()
@@ -166,6 +166,7 @@ const lex = (fileContent, file) => {
 
         if (curr == '\n') {
             line++
+            col = 1
             if (tokens.length) {
                 let next = ' ';
                 while (next == ' ') {
@@ -217,7 +218,7 @@ const lex = (fileContent, file) => {
             } else {
                 tokens.push({ type: 'operator', value: curr })
             }
-        } else if ('+*-'.includes(curr)) {
+        } else if ('+*-%'.includes(curr)) {
             if (iter.next() == '=') {
                 tokens.push({ type: 'assignment', value: curr + '=', line: line, col: col })
                 iter.move()
@@ -282,7 +283,7 @@ const lex = (fileContent, file) => {
                     col++
                     let curr = iter.next()
                     if (!curr) {
-                        throwError()
+                        throwError('EOF Error', 'Unexpected end of file', filedata, line, col)
                     }
                     iter.move()
                     if (curr == '*' && iter.next() == '/') {
