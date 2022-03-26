@@ -183,8 +183,8 @@ const operate = async (ast, scope, depth = 0, filedata) => {
     if (ast.operation == 'brackets') {
         return await operate(ast.value, scope, depth, filedata)
     }
-    
-    if(ast.operation == 'call') {
+
+    if (ast.operation == 'call') {
         return await run(ast, scope, depth, filedata)
     }
 
@@ -224,8 +224,8 @@ const operate = async (ast, scope, depth = 0, filedata) => {
 
         if (!value || WaveGrassError.isError(value)) throwError()
         return value
-    } 
-    
+    }
+
     if (ast.lhs.type == 'variable') {
         ast.lhs = getValueOfVariable(ast.lhs, scope)
     }
@@ -250,8 +250,7 @@ const operate = async (ast, scope, depth = 0, filedata) => {
         ast.rhs = createObject(ast.rhs.type, ast.rhs.value)
     }
 
-    if (ast.operation.type == 'assigment') {
-
+    if (ast.operation.type == 'assignment') {
     } else if (ast.operation.value == '+') {
         let value = ast.lhs.__add__(ast.rhs);
 
@@ -263,9 +262,7 @@ const operate = async (ast, scope, depth = 0, filedata) => {
         else if (WaveGrassError.isError(value)) throwError()
         return value
 
-    }
-
-    else if (ast.operation.value == '-') {
+    } else if (ast.operation.value == '-') {
         let value = ast.lhs.__sub__(ast.rhs)
         if (!value || WaveGrassError.isError(value)) value = ast.lhs.__r_sub__(ast.rhs)
         if (!value || WaveGrassError.isError(value)) value = ast.rhs.__r_sub__(ast.lhs)
@@ -274,9 +271,7 @@ const operate = async (ast, scope, depth = 0, filedata) => {
         if (!value) throwError()
         else if (WaveGrassError.isError(value)) throwError()
         return value
-    }
-
-    else if (ast.operation.value == '*') {
+    } else if (ast.operation.value == '*') {
         let value = ast.lhs.__mul__(ast.rhs)
         if (!value || WaveGrassError.isError(value)) value = ast.lhs.__r_mul__(ast.rhs)
         if (!value || WaveGrassError.isError(value)) value = ast.rhs.__r_mul__(ast.lhs)
@@ -314,7 +309,7 @@ const operate = async (ast, scope, depth = 0, filedata) => {
         return value
     }
 
-    if (ast.operation.value == ':') {
+    else if (ast.operation.value == ':') {
         return { type: 'property', name: ast.lhs, value: ast.rhs }
     }
 
@@ -381,7 +376,7 @@ const parse_params = async (tokens, scope, depth = 0, filedata) => {
             } else {
                 args.push(operated)
             }
-        }else {
+        } else {
             if (i.type == 'variable') {
                 let value = getValueOfVariable(i, scope)
                 if (value.type == 'nf') {
@@ -409,10 +404,13 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
 
         if (ast.rhs.operation) {
             let value = await operate(ast.rhs, scope, depth_value, filedata)
-            value = createObject(value.type, value.value)
+
+            value = createObject(value.__type__(), value.__value_of__())
 
             if (!scp) scopes[scope].map.set(ast.lhs.value, value)
             else scopes[scp].map.set(ast.lhs.value, value)
+
+            return ast.lhs
         } else {
             if (ast.rhs.type == 'variable') {
                 let value = getValueOfVariable(ast.rhs, scope)
@@ -435,6 +433,7 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
                     else scopes[scp].map.set(ast.lhs.value, createObject(ast.rhs.type, ast.rhs.value))
                 }
             }
+            return ast.lhs
         }
     } else if (ast.type == 'call') {
         const func = getValueOfVariable(ast.value, scope)
@@ -468,10 +467,10 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
             let params = func.__get_args__()
 
             for (const i in args) {
-                if(isNaN(i)) {
+                if (isNaN(i)) {
                     let index = params.indexOf(i)
-                    if(index !== null) {
-                        scopes[lscope].map.set(i, args[i]) 
+                    if (index !== null) {
+                        scopes[lscope].map.set(i, args[i])
                         params.splice(index, 1)
                     }
                 }
@@ -482,10 +481,10 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
             }
 
             let ret_val;
-            for(const i of func.__get_statements__()) {
+            for (const i of func.__get_statements__()) {
                 ret_val = await run(i, lscope, depth_value + 1, filedata)
-                if(ret_val) break
-            } 
+                if (ret_val) break
+            }
 
             scopes[lscope] = undefined
 
@@ -511,6 +510,28 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
         }
 
         scopes[lscope] = undefined
+    } else if (ast.type == 'for') {
+        let lscope = 'for' + depth_value
+        scopes[lscope] = {
+            parent: scope,
+            map: new Map()
+        }
+
+        if (ast.loopvar.operation?.type == 'assignment') {
+            ast.loopvar.type = ast.loopvar.operation.type
+            ast.loopvar = await run(ast.loopvar, lscope, depth_value, filedata)
+        }
+        while ((await conditional_check(ast.condition, lscope, filedata)).__value_of__()) {
+            for (const i of ast.block) {
+                let v = await run(i, lscope, depth_value + 1, filedata)
+                if(v && v.type == 'break') break
+            }
+
+            await run(ast.change, lscope, depth_value, filedata)
+        }
+
+        scopes[lscope] = undefined
+
     } else if (ast.type == 'while') {
         let lscope = 'while' + depth_value
         scopes[lscope] = {
@@ -518,13 +539,14 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
             map: new Map()
         }
 
-        while ((await conditional_check(ast.condition, scope, filedata)).value) {
-
+        while ((await conditional_check(ast.condition, scope, filedata)).__value_of__()) {
             await execute({ asts: ast.block, content: filedata }, lscope, depth_value + 1, filedata)
         }
         scopes[lscope] = undefined
-    } else if(ast.type == 'return') {
+    } else if (ast.type == 'return') {
         return ast.value.operation ? await operate(ast.value, scope, depth_value, filedata) : ast.value
+    } else if(ast.type == 'break') {
+        return { type: 'break' }
     }
 
 }

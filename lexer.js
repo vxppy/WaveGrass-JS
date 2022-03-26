@@ -64,7 +64,7 @@ const parseDelim = (iterable, delim, type = 'string', line, col, filedata) => {
         prev = curr
     }
 
-    if(!iterable.next()) {
+    if (!iterable.next()) {
         throwError('EOF Error', 'Unexpected end of file', filedata, line, col)
     }
     // console.log(iterable.next())

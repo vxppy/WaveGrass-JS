@@ -135,11 +135,16 @@ const parse_operators = (array, filedata) => {
                         )
                         i--
                     }
+                } else if (array[i].value == '--') {
+
+                    if (array[i - 1]?.type == 'variable') {
+                        array.splice(i - 1, 2,
+                            { type: 'assignment', lhs: array[i - 1], rhs: { operation: { type: 'operator', value: '-' }, lhs: array[i - 1], rhs: { type: 'number', value: 1 } } }
+                        )
+                        i--
+                    }
                 } else {
-                    // console.log(array, !array[i - 1], array[i - 1]?.type == 'operation')
                     if (!array[i - 1] || array[i - 1].type == 'operation') {
-                        // console.log(array)
-                        // array.splice(i - 1, i, )
                     } else if (!array[i + 1]) {
                     } else {
                         array.splice(i - 1, 3, { operation: array[i], lhs: array[i - 1], rhs: array[i + 1] })
@@ -377,7 +382,34 @@ const to_ast = (iterable, prev = null, endat, depth = 0, filedata) => {
             }
             return to_ast(iterable, { type: 'while', condition: condition, block: block }, endat, depth, filedata)
         } else if (curr.value == 'for') {
+            let cond_data = accumulate_tokens(iterable, { type: 'bracket', value: '{', depth: depth })
 
+            if (cond_data[0].type == 'bracket' && cond_data[0].value == '(') {
+                let token = cond_data[cond_data.length - 1]
+                if (token.type != 'bracket' || token.value != ')' || token.depth != cond_data[0].depth) {
+                    throwError()
+                }
+                cond_data = cond_data.splice(1, cond_data.length - 2)
+            }
+
+            cond_data = parse_params(cond_data, filedata)
+
+            iterable.move()
+
+            let [loopvar, cond, step] = [...cond_data]
+
+            let tokens = accumulate_tokens(iterable, { type: 'bracket', value: '}', depth: depth })
+            iterable.move()
+
+            let iter = iterator(tokens)
+            let block = []
+            while (iter.next()) {
+                let ast = to_ast(iter, null, endat, depth + 1, filedata)
+                if (ast) block.push(ast)
+                iter.move()
+            }
+
+            return to_ast(iterable, { type: 'for', loopvar: loopvar, condition: cond, change: step, block: block }, endat, depth, filedata)
         } else if (curr.value == 'define') {
 
             let name = iterable.next()
@@ -387,7 +419,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0, filedata) => {
             if (iterable.next().value == '(') {
                 iterable.move()
                 args = parse_params(accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: depth }), filedata).map(i => {
-                    if(i.type != 'variable') throwError()
+                    if (i.type != 'variable') throwError()
                     return i.value
                 })
                 iterable.move()
@@ -396,7 +428,6 @@ const to_ast = (iterable, prev = null, endat, depth = 0, filedata) => {
             if (iterable.next().value != '{') {
                 throwError()
             }
-            
 
             iterable.move()
             let tokens = accumulate_tokens(iterable, { type: 'bracket', value: '}', depth: depth })
@@ -411,12 +442,17 @@ const to_ast = (iterable, prev = null, endat, depth = 0, filedata) => {
             }
 
             return to_ast(iterable, { type: 'assignment', lhs: name, rhs: { type: 'method', args: args, statements: block } }, endat, depth, filedata)
+        } else if (curr.value == 'break') {
+            return to_ast(iterable, { type: 'break' }, endat, depth, filedata)
         }
     } else if (curr.type == 'operator') {
-        // if(!prev) thr
         if (curr.value == '++') {
             if (prev) {
                 return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { operation: { type: 'operator', value: '+' }, lhs: prev, rhs: { type: 'number', value: 1 } } }, endat, depth, filedata)
+            }
+        } else if (curr.value == '--') {
+            if (prev) {
+                return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { operation: { type: 'operator', value: '-' }, lhs: prev, rhs: { type: 'number', value: 1 } } }, endat, depth, filedata)
             }
         }
     }
@@ -433,7 +469,6 @@ const parse = (tokens) => {
         if (value) asts.push(value)
         iter.move()
     }
-
     execute({ asts: asts, filedata: tokens.filedata })
 }
 

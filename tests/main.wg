@@ -1,5 +1,3 @@
-define add_to_numbers (a, b) {
-    return a + b
+for i = 0, i < 10, i++ {
+    print(i)
 }
-
-print(add_to_numbers(1, 2))

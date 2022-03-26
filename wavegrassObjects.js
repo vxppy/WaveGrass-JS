@@ -114,7 +114,9 @@ class WaveGrassObject {
         return this.__properties[name]
     }
 
-    __set_property__ = (name, value) => { }
+    __set_property__ = (name, value) => { 
+        this.__properties[name] = value
+    }
 }
 
 
@@ -184,25 +186,25 @@ class WaveGrassNumber extends WaveGrassObject {
     __equals__ = rval => {
         if (rval.__value_of__() == this.__value_of__()) {
             return new WaveGrassBoolean(true)
-        } else return WaveGrassBoolean(false)
+        } else return new WaveGrassBoolean(false)
     }
 
     __strict_equals = rval => {
         if (rval.__type__() == this.__type__() && rval.__value_of__() == this.__value_of__()) {
             return new WaveGrassBoolean(true)
-        } else return WaveGrassBoolean(false)
+        } else return new WaveGrassBoolean(false)
     }
 
     __greater_than__ = rval => {
-        if (rval.__type__() == this.__type__() && rval.__value_of__() > this.__value_of__()) {
+        if (rval.__type__() == this.__type__() && rval.__value_of__() < this.__value_of__()) {
             return new WaveGrassBoolean(true)
-        } else return WaveGrassBoolean(false)
+        } else return new WaveGrassBoolean(false)
     }
 
     __less_than__ = rval => {
-        if (rval.__type__() == this.__type__() && rval.__value_of__() < this.__value_of__()) {
+        if (rval.__type__() == this.__type__() && rval.__value_of__() > this.__value_of__()) {
             return new WaveGrassBoolean(true)
-        } else return WaveGrassBoolean(false)
+        } else return new WaveGrassBoolean(false)
     }
 
     __bool__ = () => {
