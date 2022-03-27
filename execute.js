@@ -4,7 +4,7 @@ TODO
 */
 
 const throwError = require("./throwError")
-const { createObject, WaveGrassObject, WaveGrassError, WaveGrassBoolean, WaveGrassNull, print, prompt } = require("./wavegrassObjects")
+const { createObject, WaveGrassObject, WaveGrassError, WaveGrassBoolean, WaveGrassNull, print, prompt, WaveGrassNumber } = require("./wavegrassObjects")
 const input = require('./modules/input/main').input
 
 /**
@@ -22,12 +22,11 @@ let globalDepth = 3
 scopes['global'].map.set('print', print)
 scopes['global'].map.set('prompt', prompt)
 
-
 const toString = async (tokens, sep, scope, depth = 0) => {
     tokens = tokens.map(i => i instanceof WaveGrassObject ? i : createObject(i.type, i.value))
     let str = []
     for (let i = 0; i < tokens.length; i++) {
-        if (tokens[i].type == 'array') {
+        if (tokens[i] == 'array') {
             str.push('[ ' + await toString(tokens[i].values, ', ', scope, depth + 1) + ' ]')
         } else {
             if (tokens[i].operation) {
@@ -48,59 +47,12 @@ const toString = async (tokens, sep, scope, depth = 0) => {
 
 /**
  * 
- * @param {*} condition 
- * @param { string } scope 
- * @returns { {type: 'boolean', value: boolean} }
- */
-const to_truth_value = (value, scope) => {
-    if (value.type == 'variable') value = getValueOfVariable(value, scope)
-
-    if (value.type == 'nf') {
-        return { type: 'boolean', value: false }
-    }
-
-    if (value.type == 'number') {
-        if (value.value == 0 || value.value == NaN) return { type: 'boolean', value: false }
-        else return { type: 'boolean', value: true }
-    } else if (value.type == 'string') {
-        if (value.value == '') return { type: 'boolean', value: false }
-        else return { type: 'boolean', value: true }
-    } else if (value.type == 'array') {
-        if (value.length == 0) return { type: 'boolean', value: false }
-        else return { type: 'boolean', value: true }
-    } else if (value.type == 'boolean') return value
-
-    else return { type: 'boolean', value: true }
-}
-
-/**
- * 
  * @param { { type: 'comparator', value: string } } cond 
  * @param { { type: string, value: any } | WaveGrassObject } lhs 
  * @param { { type: string, value: any } | WaveGrassObject } rhs 
- * @param { string } scope 
- * @param { number } depth 
- * @param { { lines: string[], file: string } } filedata 
  * @returns { WaveGrassBoolean }
  */
-const conditional_check = (cond, lhs, rhs, scope, depth = 0, filedata) => {
-    if (lhs.type == 'variable') {
-        lhs = getValueOfVariable(lhs, scope)
-    }
-
-    if (rhs.type == 'variable') {
-        rhs = getValueOfVariable(rhs, scope)
-    }
-
-    if (!(lhs instanceof WaveGrassObject)) {
-        lhs = createObject(lhs.type, lhs.value)
-    }
-
-    if (!(rhs instanceof WaveGrassObject)) {
-        rhs = createObject(rhs.type, rhs.value)
-    }
-
-
+const conditional_check = (cond, lhs, rhs) => {
     if (cond.value == '==') {
         let value = lhs.__equals__(rhs)
         if (!value || WaveGrassError.isError(value)) value = rhs.__equals__(lhs)
@@ -157,9 +109,6 @@ const conditional_check = (cond, lhs, rhs, scope, depth = 0, filedata) => {
 
         return value
     } else {
-        lhs = to_truth_value(lhs, scope)
-        rhs = to_truth_value(rhs, scope)
-
         if (cond.value == '&&') {
             return new WaveGrassBoolean(lhs.__bool__() && rhs.__bool__())
         } else if (cond.value == '||') {
@@ -178,30 +127,11 @@ TODO
  * @param { { type: 'operator', value: string } } opp 
  * @param { { type: string, value: any } | WaveGrassObject } lhs 
  * @param { { type: string, value: any } | WaveGrassObject } rhs 
- * @param { string } scope 
- * @param { number } depth 
- * @param { { lines: string[], file: string } } filedata 
  * @returns { WaveGrassObject }
  */
-const operate_by_operation = (opp, lhs, rhs, scope, depth, filedata) => {
+const operate_by_operation = (opp, lhs, rhs) => {
     if (opp.value == '=') {
 
-    }
-
-    if (lhs.type == 'variable') {
-        lhs = getValueOfVariable(lhs, scope)
-    }
-
-    if (rhs.type == 'variable') {
-        rhs = getValueOfVariable(rhs, scope)
-    }
-
-    if (!(lhs instanceof WaveGrassObject)) {
-        lhs = createObject(lhs.type, lhs.value)
-    }
-
-    if (!(rhs instanceof WaveGrassObject)) {
-        rhs = createObject(rhs.type, rhs.value)
     }
 
     if (opp.value == '+') {
@@ -258,8 +188,18 @@ const operate_by_operation = (opp, lhs, rhs, scope, depth, filedata) => {
         if (!value) throwError()
         else if (WaveGrassError.isError(value)) throwError()
         return value
-    }
+    } else if (opp.value == '++') {
+        if (rhs) {
+            let old_value = createObject(rhs.__type__(), rhs.__value_of__())
+            rhs.__value = rhs.__add__(new WaveGrassNumber(1)).__value_of__()
+            return old_value
+        }
 
+        if (lhs) {
+            lhs.__value = lhs.__add__(new WaveGrassNumber(1)).__value_of__()
+            return lhs
+        }
+    }
     return new WaveGrassNull()
 }
 
@@ -283,203 +223,33 @@ const operate = async (ast, scope, depth = 0, filedata) => {
     for (let i = 0; i < ast.length; i++) {
         if (ast[i].type == 'operator') {
             let rhs = values.pop(), lhs = values.pop()
-            values.push(operate_by_operation(ast[i], lhs, rhs, scope, depth, filedata))
+            values.push(operate_by_operation(ast[i], lhs, rhs))
         } else if (ast[i].type == 'comparator') {
             let rhs = values.pop(), lhs = values.pop()
-            values.push(conditional_check(ast[i], lhs, rhs, scope, depth, filedata))
+            values.push(conditional_check(ast[i], lhs, rhs))
+        } else if (ast[i].type == 'symbol') {
+            if (ast[i].value == ':') {
+                let rhs = values.pop(), lhs = values.pop()
+                values.push({ type: 'property', lhs: lhs, rhs: rhs })
+            }
         } else {
             if (ast[i].type == 'call') {
                 ast[i] = await run(ast[i], scope, depth, filedata)
+            } else if (ast[i].type == 'variable') {
+                if (ast[i + 2]?.value != ':') {
+                    ast[i] = getValueOfVariable(ast[i], scope)
+                    if (!(ast[i] instanceof WaveGrassObject)) ast[i] = createObject(ast[i].type, ast[i].value)
+                }
+            } else {
+                if (!(ast[i] instanceof WaveGrassObject)) ast[i] = createObject(ast[i].type, ast[i].value)
             }
 
             values.push(ast[i])
         }
     }
 
-    if (!(values[0] instanceof WaveGrassObject)) values[0] = createObject(values[0].type, values[0].value)
     return values[0]
 }
-// let values = []
-// for(let i = 0; i < ast.length; i++) {
-//     if(ast[i].type != 'operator') {
-//         values.push(ast[i].splice())
-//     }
-// }
-// // let value = null
-// let i = 0
-// while (ast.length > 1) {
-//     if (ast[i].type == 'operator') {
-//         console.log(ast, i)
-
-//         ast[i - 2] = await operate_by_operation(ast[i], ast[i - 1], ast[i - 2], scope, depth, filedata)
-//         i -= 2
-//         console.log(ast, i)
-//     }
-
-
-//     i++
-//     ast.pop()
-// }
-
-// return ast[0]
-// if (ast.operation == 'brackets') {
-//     return await operate(ast.value, scope, depth, filedata)
-// }
-
-// if (ast.operation == 'call') {
-//     return await run(ast, scope, depth, filedata)
-// }
-
-// if (ast.operation.value == '!') {
-//     if (ast.value.type == 'operation') {
-//         ast.value = await operate(ast, scope, depth, filedata)
-//     }
-
-//     let value = to_truth_value(ast.value)
-//     value.value = !value.value
-//     return value
-// }
-
-// if (ast.operation.type == 'comparator') {
-//     return await conditional_check(ast, scope, depth, filedata)
-// }
-
-// if (ast.lhs.operation) {
-//     ast.lhs = await operate(ast.lhs, scope, depth, filedata)
-// }
-
-// if (ast.rhs.operation) {
-//     ast.rhs = await operate(ast.rhs, scope, depth, filedata)
-// }
-
-// if (ast.operation.type == 'property') {
-//     if (ast.lhs.type == 'variable') {
-//         ast.lhs = getValueOfVariable(ast.lhs, scope)
-//     }
-
-
-//     if (!(ast.lhs instanceof WaveGrassObject)) {
-//         ast.lhs = createObject(ast.lhs.type, ast.lhs.value)
-//     }
-
-//     let value = ast.lhs.__get_property__(ast.rhs.value)
-
-//     if (!value || WaveGrassError.isError(value)) throwError()
-//     return value
-// }
-
-// if (ast.lhs.type == 'variable') {
-//     ast.lhs = getValueOfVariable(ast.lhs, scope)
-// }
-
-// if (ast.rhs.type == 'variable') {
-//     ast.rhs = getValueOfVariable(ast.rhs, scope)
-// }
-
-// if (ast.lhs.type == 'call') {
-//     ast.lhs = await run(ast.lhs, scope, depth, filedata)
-// }
-
-// if (ast.rhs.type == 'call') {
-//     ast.rhs = await run(ast.rhs, scope, depth, filedata)
-// }
-
-// if (!(ast.lhs instanceof WaveGrassObject)) {
-//     ast.lhs = createObject(ast.lhs.type, ast.lhs.value)
-// }
-
-// if (!(ast.rhs instanceof WaveGrassObject)) {
-//     ast.rhs = createObject(ast.rhs.type, ast.rhs.value)
-// }
-
-// if (ast.operation.type == 'assignment') {
-// } else if (ast.operation.value == '+') {
-//     let value = ast.lhs.__add__(ast.rhs);
-
-//     if (!value || WaveGrassError.isError(value)) value = ast.lhs.__r_add__(ast.rhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.rhs.__r_add__(ast.lhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.rhs.__add__(ast.lhs)
-
-//     if (!value) throwError()
-//     else if (WaveGrassError.isError(value)) throwError()
-//     return value
-
-// } else if (ast.operation.value == '-') {
-//     let value = ast.lhs.__sub__(ast.rhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.lhs.__r_sub__(ast.rhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.rhs.__r_sub__(ast.lhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.rhs.__sub__(ast.lhs)
-
-//     if (!value) throwError()
-//     else if (WaveGrassError.isError(value)) throwError()
-//     return value
-// } else if (ast.operation.value == '*') {
-//     let value = ast.lhs.__mul__(ast.rhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.lhs.__r_mul__(ast.rhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.rhs.__r_mul__(ast.lhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.rhs.__mul__(ast.lhs)
-
-//     if (!value) throwError()
-//     else if (WaveGrassError.isError(value)) throwError()
-//     return value
-// } else if (ast.operation.value == '/') {
-//     let value = ast.lhs.__div__(ast.rhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.lhs.__r_div__(ast.rhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.rhs.__r_div__(ast.lhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.rhs.__div__(ast.lhs)
-
-//     if (!value) throwError()
-//     else if (WaveGrassError.isError(value)) throwError()
-//     return value
-// } else if (ast.operation.value == '%') {
-//     let value = ast.lhs.__mod__(ast.rhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.lhs.__r_mod__(ast.rhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.rhs.__r_mod__(ast.lhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.rhs.__mod__(ast.lhs)
-
-//     if (!value) throwError()
-//     else if (WaveGrassError.isError(value)) throwError()
-//     return value
-// } else if (ast.operation.value == '|') {
-//     let value = ast.lhs.__b_or__(ast.rhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.lhs.__r_b_or__(ast.rhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.rhs.__r_b_or__(ast.lhs)
-//     if (!value || WaveGrassError.isError(value)) value = ast.rhs.__b_or__(ast.lhs)
-
-//     if (!value) throwError()
-//     else if (WaveGrassError.isError(value)) throwError()
-//     return value
-// }
-
-// else if (ast.operation.value == ':') {
-//     return { type: 'property', name: ast.lhs, value: ast.rhs }
-// }
-
-// if (ast.operation.value == '=') {
-//     if (ast.lhs.__type != 'variable') {
-//         throwError(`Syntax Error`, `'${ast.lhs.value}' is not a variable`, filedata, ast.lhs.line, ast.lhs.col)
-//     }
-
-//     let s = scope
-//     let found, value
-//     while (s) {
-//         found = scopes[scope].map.has(ast.lhs.value)
-//         if (!found) s = scopes[scope].parent
-//         else {
-//             if (ast.rhs.operation) {
-//                 scopes[scope].map.set(ast.lhs.value, await operate(ast.rhs, s, depth, filedata))
-//             } else {
-//                 scopes[scope].map.set(ast.lhs.value, ast.rhs)
-//             }
-//             value = scopes[scope].map.get(ast.lhs.value)
-//             break
-//         }
-//     }
-
-//     if (!found) throwError(`Reference Error`, `'${ast.lhs.value}' is not defined`, filedata, ast.lhs.line, ast.lhs.col)
-//     return value
-// }
-// }
 
 /**
  * 
@@ -518,18 +288,34 @@ const parse_params = async (tokens, scope, depth = 0, filedata) => {
     for (const i of tokens) {
         if (i.type == 'operation') {
             let operated = await operate(i.value, scope, depth, filedata)
+            if (operated.type) {
+                if (operated.type == 'property') {
+                    if (operated.rhs.type == 'variable') {
+                        let value = getValueOfVariable(i, scope)
 
-            if (operated.type == 'property') {
-                args[i.lhs.value] = operated.value
-            } else {
-                args.push(operated)
-            }
+                        if (value.type == 'nf') {
+                            throwError(`Reference Error`, `'${i.value}' is not defined`, filedata, i.line, i.col)
+                        }
+
+                        args[operated.lhs.value] = value
+                    } else {
+                        if (!(operated.rhs instanceof WaveGrassObject)) {
+                            operated.rhs = createObject(operated.rhs.type, operated.rhs.value)
+                        }
+
+                        args[operated.lhs.value] = operated.rhs
+
+                    }
+                }
+            } else args.push(operated)
         } else {
             if (i.type == 'variable') {
                 let value = getValueOfVariable(i, scope)
+
                 if (value.type == 'nf') {
                     throwError(`Reference Error`, `'${i.value}' is not defined`, filedata, i.line, i.col)
                 }
+
                 args.push(value)
             } else if (i.type == 'call') {
                 args.push(await run(i, scope, depth, filedata))
@@ -538,18 +324,20 @@ const parse_params = async (tokens, scope, depth = 0, filedata) => {
                     for (let j = 0; j < i.values.length; j++) {
                         i[j] = await parse_params(i[j], scope, depth, filedata)
                     }
-                } else args.push(i)
+                } else {
+                    if(!(i instanceof WaveGrassObject)) args.push(createObject(i.type, i.value))
+                    else args.push(i)
+                }
             }
         }
     }
-
     return args
 }
 
 const run = async (ast, scope, depth_value = 0, filedata) => {
     if (ast.type == 'assignment') {
         let scp = find_variable_scope(ast.lhs, scope, filedata)
-        
+
         if (ast.rhs.type == 'operation') {
             let value = await operate(ast.rhs.value, scope, depth_value, filedata)
             if (!scp) scopes[scope].map.set(ast.lhs.value, value)
@@ -576,8 +364,9 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
                     else scopes[scp].map.set(ast.lhs.value, createObject(ast.rhs.type, ast.rhs.value))
                 }
             }
-            return ast.lhs
         }
+
+        return ast.lhs
     } else if (ast.type == 'call') {
         const func = getValueOfVariable(ast.value, scope)
 
@@ -669,17 +458,21 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
             map: new Map()
         }
 
-        if (ast.loopvar.operation?.type == 'assignment') {
-            ast.loopvar.type = ast.loopvar.operation.type
+        if (ast.loopvar.type == 'assignment') {
             ast.loopvar = await run(ast.loopvar, lscope, depth_value, filedata)
         }
-        while ((conditional_check(ast.condition, lscope, filedata)).__value_of__()) {
+
+        if (ast.condition.type != 'operation') {
+            ast.condition = { type: 'operation', value: [ast.condition] }
+        }
+
+        while ((await operate(ast.condition.value, lscope, filedata)).__value_of__()) {
             for (const i of ast.block) {
                 let v = await run(i, lscope, depth_value + 1, filedata)
                 if (v && v.type == 'break') break
             }
 
-            await run(ast.change, lscope, depth_value, filedata)
+            await operate(ast.change.value, lscope, depth_value, filedata)
         }
 
         scopes[lscope] = undefined
@@ -704,7 +497,7 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
         }
         scopes[lscope] = undefined
     } else if (ast.type == 'return') {
-        return ast.value.operation ? await operate(ast.value, scope, depth_value, filedata) : ast.value
+        return ast.value.type == 'operation' ? await operate(ast.value.value, scope, depth_value, filedata) : ast.value
     } else if (ast.type == 'break') {
         return { type: 'break' }
     }
@@ -720,6 +513,7 @@ const execute = async (tokens, scope = 'global', depth_value = 0) => {
     for (let i = 0; i < tokens.asts.length; i++) {
         if (tokens.asts[i]?.type == 'hoist') {
             hoists.push(tokens.asts.splice(i, 1)[0].value)
+            i--
         }
     }
 

@@ -350,7 +350,7 @@ const getClassFromType = (obj) => {
 
 }
 const createObject = (type, ...extra) => {
-    if (['number', 'string', 'method', 'array'].includes(type)) {
+    if (['number', 'string', 'method', 'array', 'boolean'].includes(type)) {
         return new (getClassFromType(type))(...extra)
     }
 }
