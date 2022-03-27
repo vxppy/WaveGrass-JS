@@ -46,19 +46,27 @@ class WaveGrassObject {
 
     __add__ = rval => { }
 
-    __r_add__ = rval => { }
+    __r_add__ = rval => {
+        return this.__add__(rval)
+    }
 
     __sub__ = rval => { }
 
-    __r_sub__ = rval => { }
+    __r_sub__ = rval => {
+        return this.__sub__(rval)
+    }
 
     __mul__ = rval => { }
 
-    __r_mul__ = rval => { }
+    __r_mul__ = rval => {
+        return this.__mul__(rval)
+    }
 
     __div__ = rval => { }
 
-    __r_div__ = rval => { }
+    __r_div__ = rval => {
+        return this.__div__(rval)
+    }
 
     __expo__ = rval => { }
 
@@ -87,7 +95,7 @@ class WaveGrassObject {
     __r_b_and__ = rval => { }
 
     __b_or__ = rval => { }
-    
+
     __r_b_or__ = rval => { }
 
     __b_xor__ = rval => { }
@@ -110,11 +118,11 @@ class WaveGrassObject {
 
     __iterator__ = rval => { }
 
-    __get_property__ = name => { 
+    __get_property__ = name => {
         return this.__properties[name]
     }
 
-    __set_property__ = (name, value) => { 
+    __set_property__ = (name, value) => {
         this.__properties[name] = value
     }
 }
@@ -128,7 +136,7 @@ class WaveGrassNumber extends WaveGrassObject {
         this.__type = 'number'
 
         this.__properties = {
-            toString: () => {}
+            toString: () => { }
         }
 
         this.__mutable = false
@@ -257,7 +265,7 @@ class WaveGrassString extends WaveGrassObject {
     __iterator__ = () => {
         let index = 0
         return {
-            next: () => { 
+            next: () => {
                 return { char: new WaveGrassString(this.__value[index]), index: new WaveGrassNumber(index++), finished: index == this.__value.length }
             }
         }
@@ -285,7 +293,7 @@ class WaveGrassFunction extends WaveGrassObject {
     }
 
     __get_statements__ = () => this.__statements
-    
+
     __internal__ = () => this.__is_internal
 }
 
@@ -320,6 +328,17 @@ class WaveGrassNull extends WaveGrassObject {
     }
 
     __bool__ = () => new WaveGrassBoolean(false)
+
+
+    __add__ = (rval) => {
+        if (rval.__type__() == 'number') return new WaveGrassNumber(0).__add__(rval)
+        else if (rval.__type__() == 'string') return new WaveGrassString('null').__add__(rval)
+    }
+
+    __r_add__ = (rval) => {
+        if (rval.__type__() == 'number') return new WaveGrassNumber(0).__add__(rval)
+        else if (rval.__type__() == 'string') return rval.__add__(new WaveGrassString('null'))
+    }
 }
 
 const getClassFromType = (obj) => {
@@ -340,7 +359,7 @@ const print = new WaveGrassFunction('print', ['*nargs', 'sep', 'end'], '<interna
 const prompt = new WaveGrassFunction('prompt', ['prompt'], '<internal_prompt>', true)
 
 module.exports = {
-    WaveGrassObject, WaveGrassNumber, WaveGrassString, 
+    WaveGrassObject, WaveGrassNumber, WaveGrassString,
     WaveGrassArray, WaveGrassBoolean, WaveGrassError,
     WaveGrassFunction, WaveGrassNull,
     createObject,
