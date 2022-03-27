@@ -218,7 +218,7 @@ const lex = (fileContent, file) => {
             } else {
                 tokens.push({ type: 'operator', value: curr })
             }
-        } else if ('+*-%'.includes(curr)) {
+        } else if ('+*%'.includes(curr)) {
             if (iter.next() == '=') {
                 tokens.push({ type: 'assignment', value: curr + '=', line: line, col: col })
                 iter.move()
@@ -300,11 +300,19 @@ const lex = (fileContent, file) => {
             } else {
                 tokens.push({ type: 'operator', value: '/', line: line, col: col })
             }
-        } else if ('-' == curr) {
+        } else if (curr == '-') {
             if (iter.next() == '>') {
                 iter.move()
                 col++
                 tokens.push({ type: 'assignment', value: '->', line: line, col: col })
+            } else if (iter.next() == '=') {
+                tokens.push({ type: 'assignment', value: curr + '=', line: line, col: col })
+                iter.move()
+                col++
+            } else if (iter.next() == curr) {
+                tokens.push({ type: 'operator', value: curr + curr, line: line, col: col })
+                iter.move()
+                col++
             } else {
                 tokens.push({ type: 'operator', value: curr, line: line, col: col })
             }
@@ -314,6 +322,15 @@ const lex = (fileContent, file) => {
 
     if (tokens.length) {
         if (tokens[tokens.length - 1].type != 'delim') tokens.push({ type: 'delim', value: ';', line: line, col: col })
+    }
+
+    for (let i = 0; i < tokens.length; i++) {
+        if (tokens[i].value == 'else') {
+            if (tokens[i - 1].value == ';' && tokens[i - 2].value == '}') {
+                tokens.splice(i - 1, 1)
+                i--
+            }
+        }
     }
 
     parse({ tokens: tokens, filedata: filedata })

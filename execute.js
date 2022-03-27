@@ -17,6 +17,7 @@ const scopes = {
     }
 }
 
+const breakable = ['for', 'while']
 let globalDepth = 3
 
 scopes['global'].map.set('print', print)
@@ -199,6 +200,17 @@ const operate_by_operation = (opp, lhs, rhs) => {
             lhs.__value = lhs.__add__(new WaveGrassNumber(1)).__value_of__()
             return lhs
         }
+    } else if (opp.value == '--') {
+        if (rhs) {
+            let old_value = createObject(rhs.__type__(), rhs.__value_of__())
+            rhs.__value = rhs.__sub__(new WaveGrassNumber(1)).__value_of__()
+            return old_value
+        }
+
+        if (lhs) {
+            lhs.__value = lhs.__sub__(new WaveGrassNumber(1)).__value_of__()
+            return lhs
+        }
     }
     return new WaveGrassNull()
 }
@@ -236,7 +248,12 @@ const operate = async (ast, scope, depth = 0, filedata) => {
             if (ast[i].type == 'call') {
                 ast[i] = await run(ast[i], scope, depth, filedata)
             } else if (ast[i].type == 'variable') {
-                if (ast[i + 2]?.value != ':') {
+                if (ast[i + 2]) {
+                    if (ast[i + 2].value != ':') {
+                        ast[i] = getValueOfVariable(ast[i], scope)
+                        if (!(ast[i] instanceof WaveGrassObject)) ast[i] = createObject(ast[i].type, ast[i].value)
+                    }
+                } else {
                     ast[i] = getValueOfVariable(ast[i], scope)
                     if (!(ast[i] instanceof WaveGrassObject)) ast[i] = createObject(ast[i].type, ast[i].value)
                 }
@@ -283,6 +300,24 @@ const find_variable_scope = (v, scope) => {
     return s
 }
 
+/**
+ * 
+ * @param { string } start 
+ * @param  { string[] } values 
+ */
+const find_scope_that_matches = (start, ...values) => {
+    let s = start
+
+    while (s) {
+        if (values.find(i => s.startsWith(i))) {
+            return s
+        }
+
+        s = scopes[s].parent
+    }
+    return
+}
+
 const parse_params = async (tokens, scope, depth = 0, filedata) => {
     let args = []
     for (const i of tokens) {
@@ -325,7 +360,7 @@ const parse_params = async (tokens, scope, depth = 0, filedata) => {
                         i[j] = await parse_params(i[j], scope, depth, filedata)
                     }
                 } else {
-                    if(!(i instanceof WaveGrassObject)) args.push(createObject(i.type, i.value))
+                    if (!(i instanceof WaveGrassObject)) args.push(createObject(i.type, i.value))
                     else args.push(i)
                 }
             }
@@ -334,7 +369,17 @@ const parse_params = async (tokens, scope, depth = 0, filedata) => {
     return args
 }
 
+/**
+ * 
+ * @param { { type: string, [x:string]: {} } } ast 
+ * @param { string } scope 
+ * @param { number } depth_value 
+ * @param { { lines: string[], file: string } } filedata 
+ * @returns 
+ */
 const run = async (ast, scope, depth_value = 0, filedata) => {
+    ast = structuredClone(ast)
+
     if (ast.type == 'assignment') {
         let scp = find_variable_scope(ast.lhs, scope, filedata)
 
@@ -348,8 +393,14 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
                 if (value.type == 'nf') {
                     throwError(`Reference Error`, `'${ast.lhs.value}' is not defined`, filedata, ast.lhs.line, ast.lhs.col)
                 }
-                if (!scp) scopes[scope].map.set(ast.lhs.value, structuredClone(value))
-                else scopes[scp].map.set(ast.lhs.value, structuredClone(value))
+
+                if (value.__type__() == 'method') {
+                    if (!scp) scopes[scope].map.set(ast.lhs.value, createObject(value.__type__(), ast.lhs.value, value.__get_args__(), value.__get_statements__(), value.__internal__()))
+                    else scopes[scp].map.set(ast.lhs.value, createObject(value.__type__(), ast.lhs.value, value.__get_args__(), value.__get_statements__(), value.__internal__()))
+                } else {
+                    if (!scp) scopes[scope].map.set(ast.lhs.value, createObject(value.__type__(), value.__value_of__()))
+                    else scopes[scp].map.set(ast.lhs.value, createObject(value.__type__(), value.__value_of__()))
+                }
             } else if (ast.rhs.type == 'call') {
                 let val = await run(ast.rhs, scope, depth_value)
                 val = createObject(val.type, val.value)
@@ -367,7 +418,33 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
         }
 
         return ast.lhs
-    } else if (ast.type == 'call') {
+    } else if(ast.type == 'assignment2') {
+        let scp = find_variable_scope(ast.lhs, scope, filedata)
+        if (ast.rhs.type == 'operation') {
+            let value = await operate(ast.rhs.value, scope, depth_value, filedata)
+            if (!scp) scopes[scope].map.set(ast.lhs.value, value)
+            else scopes[scp].map.set(ast.lhs.value, value)
+        } else {
+            if (ast.rhs.type == 'variable') {
+                let value = getValueOfVariable(ast.rhs, scope)
+                if (value.type == 'nf') {
+                    throwError(`Reference Error`, `'${ast.lhs.value}' is not defined`, filedata, ast.lhs.line, ast.lhs.col)
+                }
+
+                if (!scp) scopes[scope].map.set(ast.lhs.value, value)
+                else scopes[scp].map.set(ast.lhs.value, value)
+            } else if (ast.rhs.type == 'call') {
+                let val = await run(ast.rhs, scope, depth_value)
+                val = createObject(val.type, val.value)
+
+                if (!scp) scopes[scope].map.set(ast.lhs.value, val)
+                else scopes[scp].map.set(ast.lhs.value, val)
+            } else {
+                if (!scp) scopes[scope].map.set(ast.lhs.value, createObject(ast.rhs.type, ast.rhs.value))
+                else scopes[scp].map.set(ast.lhs.value, createObject(ast.rhs.type, ast.rhs.value))
+            }
+        }
+    }else if (ast.type == 'call') {
         const func = getValueOfVariable(ast.value, scope)
 
         if (func.type == 'nf') {
@@ -420,7 +497,7 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
 
             scopes[lscope] = undefined
 
-            return ret_val ?? new WaveGrassNull()
+            return ret_val.value ?? new WaveGrassNull()
         }
     } else if (ast.type == 'if') {
         let lscope = 'if' + depth_value
@@ -433,30 +510,71 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
             ast.condition = { type: 'operation', value: [ast.condition] }
         }
 
+        let br = false, cont = false, ret = false
         if ((await operate(ast.condition.value, scope, filedata)).__value_of__()) {
             for (const i of ast.positive) {
                 let v = await run(i, lscope, depth_value + 1, filedata)
-                if (v && v.type == 'break') break
+                if (v) {
+                    if (v.type == 'break') {
+                        br = true
+                        break
+                    } else if (v.type == 'continue') {
+                        cont = true
+                        break
+                    } else if (v.type == 'return') {
+                        ret = v.value
+                        break
+                    }
+                }
             }
         } else {
             if (ast.negative) {
                 if (Array.isArray(ast.negative)) {
                     for (const i of ast.negative) {
                         let v = await run(i, lscope, depth_value + 1, filedata)
-                        if (v && v.type == 'break') break
+                        if (v) {
+                            if (v.type == 'break') {
+                                br = true
+                                break
+                            } else if (v.type == 'continue') {
+                                cont = true
+                                break
+                            } else if (v.type == 'return') {
+                                ret = v.value
+                                break
+                            }
+                        }
                     }
+
                 } else {
-                    await run(ast.negative, lscope, depth_value + 1, filedata)
+                    let v = await run(ast.negative, lscope, depth_value + 1, filedata)
+                    if (v) {
+                        if (v.type == 'break') {
+                            br = true
+                        } else if (v.type == 'continue') {
+                            cont = true
+                        } else if (v.type == 'return') {
+                            ret = v.value
+                        }
+                    }
                 }
             }
+
         }
+
         scopes[lscope] = undefined
+
+        if (br) return { type: 'break' }
+        if (cont) return { type: 'continue' }
+        if (ret) return ret
     } else if (ast.type == 'for') {
         let lscope = 'for' + depth_value
+
         scopes[lscope] = {
             parent: scope,
             map: new Map()
         }
+
 
         if (ast.loopvar.type == 'assignment') {
             ast.loopvar = await run(ast.loopvar, lscope, depth_value, filedata)
@@ -466,17 +584,30 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
             ast.condition = { type: 'operation', value: [ast.condition] }
         }
 
+        let out = false, ret = false
         while ((await operate(ast.condition.value, lscope, filedata)).__value_of__()) {
             for (const i of ast.block) {
                 let v = await run(i, lscope, depth_value + 1, filedata)
-                if (v && v.type == 'break') break
+                if (v) {
+                    if (v.type == 'break') {
+                        out = true
+                        break
+                    } else if (v.type == 'continue') {
+                        break
+                    } else if (v.type == 'return') {
+                        ret = v.value
+                        break
+                    }
+                }
             }
 
+            if (out) break
             await operate(ast.change.value, lscope, depth_value, filedata)
         }
 
         scopes[lscope] = undefined
 
+        if (ret) return ret.value
     } else if (ast.type == 'while') {
         let lscope = 'while' + depth_value
         scopes[lscope] = {
@@ -484,22 +615,59 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
             map: new Map()
         }
 
-
         if (ast.condition.type != 'operation') {
             ast.condition = { type: 'operation', value: [ast.condition] }
         }
 
+        let out = false, ret = false
         while ((await operate(ast.condition.value, scope, filedata)).__value_of__()) {
             for (const i of ast.block) {
                 let v = await run(i, lscope, depth_value + 1, filedata)
-                if (v && v.type == 'break') break
+                if (v) {
+                    if (v.type == 'break') {
+                        out = true
+                        break
+                    } else if (v.type == 'continue') {
+                        break
+                    } else if (v.type == 'return') {
+                        ret = v.value
+                        break
+                    }
+                }
             }
+
+            if (out) break
         }
         scopes[lscope] = undefined
+
+        if (ret) return ret.value
     } else if (ast.type == 'return') {
-        return ast.value.type == 'operation' ? await operate(ast.value.value, scope, depth_value, filedata) : ast.value
+        let s = scope
+        while (s) {
+            if (['for', 'while', 'if'].find(i => s.startsWith(i))) s = scopes[s].parent
+
+            if (s == 'global') throwError('Syntax Error', 'Unexpcted token \'return\'', filedata, ast.line, ast.col)
+            else break
+        }
+
+
+        return { type: 'return', value: ast.value.type == 'operation' ? await operate(ast.value.value, scope, depth_value, filedata) : ast.value }
     } else if (ast.type == 'break') {
+        let br = find_scope_that_matches(scope, ...breakable)
+
+        if (!br) {
+            throwError('Syntax Error', 'Unexpcted token \'break\'', filedata, ast.line, ast.col)
+        }
+
         return { type: 'break' }
+    } else if (ast.type == 'continue') {
+        let br = find_scope_that_matches(scope, ...breakable)
+
+        if (!br) {
+            throwError('Syntax Error', 'Unexpcted token \'continue\'', filedata, ast.line, ast.col)
+        }
+
+        return { type: 'continue' }
     }
 
 }

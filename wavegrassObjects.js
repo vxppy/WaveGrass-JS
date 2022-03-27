@@ -151,11 +151,7 @@ class WaveGrassNumber extends WaveGrassObject {
             return new WaveGrassNumber(this.__value_of__() + rval.__value_of__())
         } else return new WaveGrassError(`Cannot add a ${rval.__class__()} and <class number>`)
     }
-
-    __r_add__ = rval => {
-        return this.__add__(rval)
-    }
-
+    
     __sub__ = rval => {
         if (rval.__type__() == 'number') {
             return new WaveGrassNumber(this.__value_of__() - rval.__value_of__())
@@ -173,11 +169,6 @@ class WaveGrassNumber extends WaveGrassObject {
             return new WaveGrassNumber(this.__value_of__() * rval.__value_of__())
         } else return new WaveGrassError(`Cannot multiply a ${rval.__class__()} and <class number>`)
     }
-
-    __r_mul__ = rval => {
-        return this.__mul__(rval)
-    }
-
 
     __div__ = rval => {
         if (rval.__type__() == 'number') {
@@ -270,7 +261,6 @@ class WaveGrassString extends WaveGrassObject {
             }
         }
     }
-
 }
 
 class WaveGrassArray extends WaveGrassObject {
@@ -328,7 +318,6 @@ class WaveGrassNull extends WaveGrassObject {
     }
 
     __bool__ = () => new WaveGrassBoolean(false)
-
 
     __add__ = (rval) => {
         if (rval.__type__() == 'number') return new WaveGrassNumber(0).__add__(rval)

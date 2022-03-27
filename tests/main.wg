@@ -1,5 +1,2 @@
-add_to_words('world', a: 'Hello')
-
-hoist define add_to_words(a, b) {
-    print(a, b, sep: ', ', end: '!')
-}
+a -> print
+a(a, print)

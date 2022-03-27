@@ -106,7 +106,7 @@ const to_post_fix_notation = (array, filedata) => {
         } else if (token.type == 'bracket' && token.value == '(') {
             stack.push(token)
         } else if (token.type == 'bracket' && token.value == ')') {
-            while (stack[stack.length - 1].value != '(' && stack[stack.length -  1] != token.depth) {
+            while (stack[stack.length - 1].value != '(' && stack[stack.length - 1] != token.depth) {
                 result.push(stack.pop())
             }
             stack.pop()
@@ -125,8 +125,8 @@ const to_post_fix_notation = (array, filedata) => {
     return result
 }
 const parse_operators = (array, filedata) => {
-    if(array.length < 1) return []
-    if(array.length == 1) return array[0]
+    if (array.length < 1) return []
+    if (array.length == 1) return array[0]
     return { type: 'operation', value: to_post_fix_notation(array, filedata) }
 }
 
@@ -253,7 +253,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0, filedata) => {
             let next = parse_operators(accumulate_tokens(iterable, endat), filedata)
             return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: next }, endat, depth, filedata)
         } else if (curr.value == '->') {
-            let next = accumulate_tokens(iterable, endat, filedata)
+            let next =parse_operators(accumulate_tokens(iterable, endat), filedata)
             return to_ast(iterable, { type: 'assignment2', lhs: prev, rhs: next }, endat, depth, filedata)
         } else {
             let next = parse_operators(accumulate_tokens(iterable, endat), filedata)
@@ -271,7 +271,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0, filedata) => {
         if (curr.value == 'hoist') {
             return to_ast(iterable, { type: 'hoist', value: to_ast(iterable, null, endat, depth, filedata) }, endat, depth, filedata)
         } else if (curr.value == 'return') {
-            return to_ast(iterable, { type: 'return', value: parse_operators(accumulate_tokens(iterable, endat), filedata) }, endat, depth, filedata)
+            return to_ast(iterable, { type: 'return', value: parse_operators(accumulate_tokens(iterable, endat), filedata),  line: curr.line, col: curr.col }, endat, depth, filedata)
         } else if (curr.value == 'if') {
             let condition = parse_operators(accumulate_tokens(iterable, { type: 'bracket', value: '{', depth: depth }), filedata)
             iterable.move()
@@ -365,7 +365,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0, filedata) => {
 
             let [loopvar, cond, step] = [...cond_data]
 
-            if(loopvar.type == 'operation') {
+            if (loopvar.type == 'operation') {
                 loopvar.value.splice(1, 1, loopvar.value[2], loopvar.value[1])
 
                 let iter = iterator(loopvar.value)
@@ -388,7 +388,6 @@ const to_ast = (iterable, prev = null, endat, depth = 0, filedata) => {
 
             return to_ast(iterable, { type: 'for', loopvar: loopvar, condition: cond, change: step, block: block }, endat, depth, filedata)
         } else if (curr.value == 'define') {
-
             let name = iterable.next()
             iterable.move()
 
@@ -420,7 +419,9 @@ const to_ast = (iterable, prev = null, endat, depth = 0, filedata) => {
 
             return to_ast(iterable, { type: 'assignment', lhs: name, rhs: { type: 'method', args: args, statements: block } }, endat, depth, filedata)
         } else if (curr.value == 'break') {
-            return to_ast(iterable, { type: 'break' }, endat, depth, filedata)
+            return to_ast(iterable, { type: 'break', line: curr.line, col: curr.col }, endat, depth, filedata)
+        } else if (curr.value == 'continue') {
+            return to_ast(iterable, { type: 'continue', line: curr.line, col: curr.col }, endat, depth, filedata)
         }
     } else if (curr.type == 'operator') {
         if (curr.value == '++') {
@@ -441,6 +442,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0, filedata) => {
 const parse = (tokens) => {
     let iter = iterator(tokens.tokens)
     let asts = []
+
     while (iter.next()) {
         let value = to_ast(iter, null, { type: 'delim', value: ';' }, 0, tokens.filedata)
         if (value) asts.push(value)
