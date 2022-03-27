@@ -1,3 +1,5 @@
-for i = 0, i < 10, i++ {
-    print(i)
+add_to_words('world', a: 'Hello')
+
+hoist define add_to_words(a, b) {
+    print(a, b, sep: ', ', end: '!')
 }

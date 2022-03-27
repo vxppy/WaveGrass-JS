@@ -6,17 +6,45 @@ const throwError = require("./throwError")
  * @typedef { { type: string, value: string | number, depth?: number, line: number, col: number } } Token
  */
 
-const precedence = {
-    8: [':', '='],
-    7: ['(', '['],
-    6: ['**', '++', '--'],
-    5: ['!'],
-    4: ['*', '/', '%'],
-    3: ['+', '-'],
-    2: ['==', '!=', '>', '<', '>=', '<='],
-    1: ['&&', '||']
-}
+const precedence = (token) => {
+    if (!token) return -1
 
+    let value = token.value
+
+    switch (value) {
+        case ':':
+        case '=':
+            return 8
+        case '[':
+            return 7
+        case '**':
+        case '++':
+        case '--':
+            return 6
+        case '!':
+            return 5
+        case '*':
+        case '/':
+        case '%':
+            return 4
+        case '+':
+        case '-':
+            return 3
+        case '==':
+        case '!=':
+        case '<':
+        case '>':
+        case '>=':
+        case '<=':
+            return 2
+        case '&&':
+        case '||':
+            return 1
+    }
+
+    return -1
+}
+const non_operator_types = ['number', 'string', 'array', 'boolean', 'call', 'variable']
 
 /**
  * 
@@ -48,116 +76,58 @@ const accumulate_tokens = (iterable, endat) => {
  * 
  * @param { Token[] } array 
  */
-const parse_operators = (array, filedata) => {
-    if (array.length == 0) {
-        return []
-    }
-    if (array.length == 1) {
-        return array[0]
-    }
-    let oper = 8
-    while (oper) {
-        let i = 0
-        while (i < array.length) {
-            if (precedence[oper].includes(array[i].value)) {
-                if (array[i].value == '(') {
-                    for (let j = i + 1; j < array.length; j++) {
-                        if (array[j].value == ')' && array[j].depth == array[i].depth) {
-                            i2 = j
-                            break
-                        }
-                    }
-                    if (i2 == -1) {
-                        throwError('EOF Error', 'Unexpected end of file', filedata, array[i].line, array[i].col)
-                    }
 
-                    if (array?.[i - 1] && (array[i - 1]?.operation == 'brackets' || ['variable', 'number', 'string'].includes(array[i - 1].type))) {
-                        array.splice(i - 1, 3,
-                            {
-                                type: 'call', value: array[i - 1],
-                                args: parse_params(array.splice(i + 1, i2 - i - 1), filedata)
-                            })
-                        i--
-                    } else {
-                        array.splice(i, 2, {
-                            operation: 'brackets',
-                            value: parse_operators(array.splice(i + 1, i2 - i - 1), filedata)
-                        })
-                    }
-                } else if (array[i].value == '[') {
-                    for (let j = i + 1; j < array.length; j++) {
-                        if (array[j].value == ']' && array[j].depth == array[i].depth) {
-                            i2 = j
-                            break
-                        }
-                    }
-                    if (i2 == -1) {
+const to_post_fix_notation = (array, filedata) => {
+    let stack = []
+    let result = []
 
-                    }
+    for (let i = 0; i < array.length; i++) {
+        let token = array[i]
 
-                    array.splice(i, 2, {
-                        type: 'array',
-                        values: parse_array(array.splice(i + 1, i2 - i - 1), filedata)
-                    })
-
-                } else if (array[i].value == '!') {
-                    if (array[i + 1].value == '(') {
-                        for (let j = i + 2; j < array.length; j++) {
-                            if (array[j].value == ')' && array[j].depth == array[i].depth) {
-                                i2 = j
-                                break
-                            }
-                        }
-                        if (i2 == -1) {
-                            throwError('EOF Error', 'Unexpected end of file', filedata, array[i].line, array[i].col)
-                        }
-                        if (array?.[i - 1] && (array[i - 1]?.operation == 'brackets' || ['variable', 'number', 'string'].includes(array[i - 1].type))) {
-                            array.splice(i - 1, 3,
-                                {
-                                    type: 'call', value: array[i - 1],
-                                    args: parse_params(array.splice(i + 1, i2 - i - 1), filedata)
-                                })
-                            i--
-                        } else {
-                            array.splice(i + 1, 2, {
-                                operation: 'brackets',
-                                value: parse_operators(array.splice(i + 1, i2 - i - 1), filedata)
-                            })
-                        }
-                        array.slice(i, 2, { operation: array[i], value: array[i + 1] })
-                    } else array.splice(i, 2, { operation: array[i], value: array[i + 1] })
-                    i--
-                } else if (array[i].value == '++') {
-
-                    if (array[i - 1]?.type == 'variable') {
-                        array.splice(i - 1, 2,
-                            { type: 'assignment', lhs: array[i - 1], rhs: { operation: { type: 'operator', value: '+' }, lhs: array[i - 1], rhs: { type: 'number', value: 1 } } }
-                        )
-                        i--
-                    }
-                } else if (array[i].value == '--') {
-
-                    if (array[i - 1]?.type == 'variable') {
-                        array.splice(i - 1, 2,
-                            { type: 'assignment', lhs: array[i - 1], rhs: { operation: { type: 'operator', value: '-' }, lhs: array[i - 1], rhs: { type: 'number', value: 1 } } }
-                        )
-                        i--
-                    }
-                } else {
-                    if (!array[i - 1] || array[i - 1].type == 'operation') {
-                    } else if (!array[i + 1]) {
-                    } else {
-                        array.splice(i - 1, 3, { operation: array[i], lhs: array[i - 1], rhs: array[i + 1] })
-                        i--
+        if (non_operator_types.includes(token.type)) {
+            if (array[i + 1] && array[i + 1].type == 'bracket' && array[i + 1].value == '(') {
+                let foundIndex = -1
+                for (let j = i + 2; j < array.length; j++) {
+                    if (array[j].type == 'bracket' && array[j].value == ')' && array[j].depth == array[i + 1].depth) {
+                        foundIndex = j
                     }
                 }
+
+                if (!foundIndex) {
+                    throwError()
+                }
+
+                array.splice(i, 3, {
+                    type: 'call', value: array[i],
+                    args: parse_params(array.splice(i + 2, foundIndex - i - 2), filedata)
+                })
+                i--
+            } else result.push(token)
+        } else if (token.type == 'bracket' && token.value == '(') {
+            stack.push(token)
+        } else if (token.type == 'bracket' && token.value == ')') {
+            while (stack[stack.length - 1].value != '(' && stack[stack.length -  1] != token.depth) {
+                result.push(stack.pop())
             }
-            i++
+            stack.pop()
+        } else {
+            while (stack.length && precedence(token) <= precedence(stack[stack.length - 1])) {
+                result.push(stack.pop())
+            }
+            stack.push(token)
         }
-        oper--
     }
 
-    return array[0]
+    while (stack.length) {
+        result.push(stack.pop())
+    }
+
+    return result
+}
+const parse_operators = (array, filedata) => {
+    if(array.length < 1) return []
+    if(array.length == 1) return array[0]
+    return { type: 'operation', value: to_post_fix_notation(array, filedata) }
 }
 
 /**
@@ -190,10 +160,7 @@ const parse_params = (tokens, filedata) => {
                     })
                 i--
             } else {
-                tokens.splice(i, 2, {
-                    operation: 'brackets',
-                    value: parse_operators(tokens.splice(i + 1, i2 - i - 1), filedata)
-                })
+                tokens.splice(i, 2, parse_operators(tokens.splice(i + 1, i2 - i - 1), filedata))
             }
             params.push(tokens.shift())
             i = 0
@@ -397,6 +364,16 @@ const to_ast = (iterable, prev = null, endat, depth = 0, filedata) => {
             iterable.move()
 
             let [loopvar, cond, step] = [...cond_data]
+
+            if(loopvar.type == 'operation') {
+                loopvar.value.splice(1, 1, loopvar.value[2], loopvar.value[1])
+
+                let iter = iterator(loopvar.value)
+                while (iter.next()) {
+                    loopvar = to_ast(iter, null, endat, depth + 1, filedata)
+                    iter.move()
+                }
+            }
 
             let tokens = accumulate_tokens(iterable, { type: 'bracket', value: '}', depth: depth })
             iterable.move()
