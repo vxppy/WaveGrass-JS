@@ -500,7 +500,7 @@ const run = async (ast, scope, depth_value = 0) => {
                 return new WaveGrassNull()
             } else if (internal_type == '<internal_prompt>') {
                 WaveGrassError.trace.pop()
-                return createObject('string', await input(await toString(params, '', scope)))
+                return createObject('string', await input(await toString(args, '', scope)))
             }
         } else {
             let lscope = `${func.name}${depth_value}`
