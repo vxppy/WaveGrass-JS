@@ -252,7 +252,12 @@ class WaveGrassNumber extends WaveGrassObject {
     }
 
     __mul__ = rval => {
+        let old_type = rval.__type__(), old_value = rval.__value_of__()
         rval = WaveGrassNumber.parseInt(rval, 10)
+
+        if(old_type == 'string' && isNaN(rval.__value_of__())) {
+            if(this.__value_of__() != 'NaN') return new WaveGrassString(old_value.repeat(this.__value_of__()))
+        }
         if (rval.__value_of__() != 'NaN' || this.__value_of__() != 'NaN') {
             return new WaveGrassNumber(this.__value_of__() * rval.__value_of__())
         } else new WaveGrassNumber('NaN')
@@ -364,7 +369,7 @@ class WaveGrassString extends WaveGrassObject {
     }
 
     __mul__ = rval => {
-        return new WaveGrassString(this.__string__().repeat(WaveGrassNumber.parseInt(rval, 10)))
+        return new WaveGrassString(this.__string__().repeat(WaveGrassNumber.parseInt(rval, 10).__value_of__()))
     }
 
     __r_mul__ = rval => {
@@ -500,11 +505,14 @@ const createObject = (type, ...extra) => {
 
 const print = new WaveGrassFunction('print', ['*nargs', 'sep', 'end'], '<internal_print>', true)
 const prompt = new WaveGrassFunction('prompt', ['prompt'], '<internal_prompt>', true)
+const parseNum = new WaveGrassFunction('parseNum', ['value', 'base'], '<internal_to_num>', true)
+const _isNaN = new WaveGrassFunction('isNaN', ['value'], '<internal_isNaN>', true)
+
 
 module.exports = {
     WaveGrassObject, WaveGrassNumber, WaveGrassString,
     WaveGrassArray, WaveGrassBoolean, WaveGrassError,
     WaveGrassFunction, WaveGrassNull,
     createObject,
-    print, prompt
+    print, prompt, parseNum, _isNaN
 }

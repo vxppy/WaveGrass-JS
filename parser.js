@@ -36,9 +36,9 @@ const precedence = (token) => {
             return 5
         case '<<':
         case '>>':
-        case '>>>': 
+        case '>>>':
             return 4
-        case '&': 
+        case '&':
         case '^':
         case '|':
             return 3
@@ -188,8 +188,6 @@ const parse_params = (tokens) => {
                 tokens.splice(i, 2, parse_operators(tokens.splice(i + 1, i2 - i - 1)))
                 i--
             }
-            params.push(tokens.shift())
-            tokens.shift()
             i = 0
         } else {
             i++
@@ -458,15 +456,15 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
             let args = []
 
             if (arg_tokens.length) {
-                if(arg_tokens[0].value != '(') {
+                if (arg_tokens[0].value != '(') {
                     throwError(new WaveGrassError('Syntax Error', `Expected a '(' but instead got '${arg_tokens[0].value}'`, arg_tokens[0].col, arg_tokens[0].line))
                 }
-    
-                if(arg_tokens[arg_tokens.length - 1].value != ')') {
+
+                if (arg_tokens[arg_tokens.length - 1].value != ')') {
                     throwError(new WaveGrassError('Syntax Error', `Expected a '(' but instead got '${arg_tokens[arg_tokens.length - 1].value}'`, arg_tokens[arg_tokens.length - 1].col, arg_tokens[arg_tokens.length - 1].line))
                 }
-    
-                if(arg_tokens.pop().depth != arg_tokens.shift().depth) {
+
+                if (arg_tokens.pop().depth != arg_tokens.shift().depth) {
                     throwError(new WaveGrassError('Syntax Error', `Unmatched Parathesis`, curr.col, curr.line))
                 }
                 args = parse_params(arg_tokens).map(i => {

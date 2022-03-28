@@ -1,2 +1,2 @@
 a = prompt('why?: ')
-print(a)
+print(parseNum(a) + 2, 2)
