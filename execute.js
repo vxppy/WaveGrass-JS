@@ -4,7 +4,7 @@ TODO
 */
 
 const throwError = require("./throwError")
-const { createObject, WaveGrassObject, WaveGrassError, WaveGrassBoolean, WaveGrassNull, print, prompt, WaveGrassNumber } = require("./wavegrassObjects")
+const { createObject, WaveGrassObject, WaveGrassError, WaveGrassBoolean, WaveGrassNull, print, prompt, WaveGrassNumber, parseNum, _isNaN } = require("./wavegrassObjects")
 const input = require('./modules/input/main').input
 
 /**
@@ -22,6 +22,9 @@ let globalDepth = 3
 
 scopes['global'].map.set('print', print)
 scopes['global'].map.set('prompt', prompt)
+scopes['global'].map.set('parseNum', parseNum)
+scopes['global'].map.set('isNaN', _isNaN)
+
 
 const unary = ['!', '~', '!!', '~~']
 
@@ -67,14 +70,14 @@ const conditional_check = (cond, lhs, rhs) => {
         value = lhs.__equals__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__equals__(lhs)
 
-        if(!WaveGrassError.isError(value)) {
+        if (!WaveGrassError.isError(value)) {
             value = value.__not__()
         }
-    }  else if (cond.value == '!==') {
+    } else if (cond.value == '!==') {
         value = lhs.__strict_equals__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__strict_equals__(lhs)
 
-        if(!WaveGrassError.isError(value)) {
+        if (!WaveGrassError.isError(value)) {
             value = value.__not__()
         }
     } else if (cond.value == '>') {
@@ -489,19 +492,28 @@ const run = async (ast, scope, depth_value = 0) => {
             throwError(new WaveGrassError(`Reference Error`, `'${ast.value.value}' is not a method`, ast.value.line, ast.value.col))
         }
         let args = await parse_params(ast.args, scope, depth_value)
+        let ret = new WaveGrassNull()
         if (func.__internal__()) {
             let internal_type = func.__get_statements__()
             if (internal_type == '<internal_print>') {
                 let sep = args.sep?.__value_of__() ?? ' '
                 let end = args.end?.__value_of__() ?? '\n'
                 process.stdout.write(`${await toString(args, sep, scope)}${end}`)
-
-                WaveGrassError.trace.pop()
-                return new WaveGrassNull()
             } else if (internal_type == '<internal_prompt>') {
-                WaveGrassError.trace.pop()
-                return createObject('string', await input(await toString(args, '', scope)))
+                ret = createObject('string', await input(await toString(args, '', scope)))
+            } else if (internal_type == '<internal_to_num>') {
+                if (!args[0]) return new WaveGrassNull()
+
+                if (args[0].__value_of__().includes('.')) {
+                    ret = createObject('number', parseFloat(args[0].__value_of__()))
+                } else
+                    ret = createObject('number', parseInt(args[0].__value_of__(), 10))
+            } else if (internal_type == '<internal_isNaN>') {
+                if (isNaN(args[0].__value_of__())) return new WaveGrassBoolean(true)
+                else new WaveGrassBoolean(false)
             }
+            WaveGrassError.trace.pop()
+            return ret
         } else {
             let lscope = `${func.name}${depth_value}`
             scopes[lscope] = {
