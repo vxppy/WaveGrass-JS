@@ -509,8 +509,8 @@ const run = async (ast, scope, depth_value = 0) => {
                 } else
                     ret = createObject('number', parseInt(args[0].__value_of__(), 10))
             } else if (internal_type == '<internal_isNaN>') {
-                if (isNaN(args[0].__value_of__())) return new WaveGrassBoolean(true)
-                else new WaveGrassBoolean(false)
+                if (isNaN(args[0].__value_of__())) ret = new WaveGrassBoolean(true)
+                ret = new WaveGrassBoolean(false)
             }
             WaveGrassError.trace.pop()
             return ret

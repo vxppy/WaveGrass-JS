@@ -1,2 +1,2 @@
 a = prompt('why?: ')
-print(parseNum(a) + 2, 2)
+print(isNaN(a))
