@@ -6,20 +6,24 @@ const lex = require('./lexer')
  */
 let file = ''
 
-if(process.argv.length > 2) {
+if (process.argv.length > 2) {
     file = process.argv[2]
 } else {
     file = 'main.wg'
 }
 
-if(!file.endsWith('.wg')) {
-    file += '.wg'
+let readAble;
+if (/\w:/.test(file)) {
+    if (fs.existsSync(`${file}`)) {
+        readAble = fs.readFileSync(`${file}`, 'utf-8')
+    }
+} else {
+    if (fs.existsSync(`./${file}`)) {
+        readAble = fs.readFileSync(`./${file}`, 'utf-8')
+    }
 }
 
-
-if(fs.existsSync(`./tests/${file}`)) {
-    const readAble = fs.readFileSync(`./tests/${file}`, 'utf-8')
-    lex(readAble, file)
-} else {
-    console.log('\nFile not found. Make sure it is in the tests folder with \x1b[1m.wg\x1b[0m extension\n')
+if (readAble) lex(readAble, file)
+else {
+    console.log('\nFile not found. Make sure the file exists')
 }
