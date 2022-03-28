@@ -209,7 +209,7 @@ const lex = (fileContent, file) => {
             } else {
                 tokens.push({ type: 'assignment', value: '=', line: line, col: col })
             }
-        } else if ('+*%~!^'.includes(curr)) {
+        } else if ('+*%~^'.includes(curr)) {
             if (iter.next() == '=') {
                 tokens.push({ type: 'assignment', value: curr + '=', line: line, col: col })
                 iter.move()
@@ -302,6 +302,20 @@ const lex = (fileContent, file) => {
             } else if (iter.next() == curr) {
                 tokens.push({ type: 'operator', value: curr + curr, line: line, col: col })
                 iter.move()
+                col++
+            } else {
+                tokens.push({ type: 'operator', value: curr, line: line, col: col })
+            }
+        } else if(curr == '!') {
+            if (iter.next() == '=') {
+                iter.move()
+                if(iter.next() == '=') {
+                    iter.move()
+                    tokens.push({ type: 'comparator', value: '!==', line: line, col: col })
+                    col++
+                } else {
+                    tokens.push({ type: 'comparator', value: '!=', line: line, col: col })
+                }
                 col++
             } else {
                 tokens.push({ type: 'operator', value: curr, line: line, col: col })

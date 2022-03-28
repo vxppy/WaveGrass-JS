@@ -63,6 +63,20 @@ const conditional_check = (cond, lhs, rhs) => {
     } else if (cond.value == '==') {
         value = lhs.__equals__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__equals__(lhs)
+    } else if (cond.value == '!=') {
+        value = lhs.__equals__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__equals__(lhs)
+
+        if(!WaveGrassError.isError(value)) {
+            value = value.__not__()
+        }
+    }  else if (cond.value == '!==') {
+        value = lhs.__strict_equals__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__strict_equals__(lhs)
+
+        if(!WaveGrassError.isError(value)) {
+            value = value.__not__()
+        }
     } else if (cond.value == '>') {
         value = lhs.__greater_than__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__greater_than__(lhs)
@@ -265,6 +279,7 @@ const operate = async (ast, scope, depth = 0) => {
         }
     }
 
+    // if(values.length > 1) throwError(new WaveGrassError('Syntax Error', `Unexpected token ${values[1].value ?? values[1].__value_of__()}`, values[1].col, values[1].line))
     return values[0]
 }
 
@@ -455,9 +470,7 @@ const run = async (ast, scope, depth_value = 0) => {
         } else if (func.__type != 'method') {
             throwError(new WaveGrassError(`Reference Error`, `'${ast.value.value}' is not a method`, ast.value.line, ast.value.col))
         }
-
         let args = await parse_params(ast.args, scope, depth_value)
-
         if (func.__internal__()) {
             let internal_type = func.__get_statements__()
             if (internal_type == '<internal_print>') {
@@ -477,9 +490,7 @@ const run = async (ast, scope, depth_value = 0) => {
                 parent: scope,
                 map: new Map()
             }
-
             let params = func.__get_args__()
-
             for (const i in args) {
                 if (isNaN(i)) {
                     let index = params.indexOf(i)
@@ -489,18 +500,15 @@ const run = async (ast, scope, depth_value = 0) => {
                     }
                 }
             }
-
             for (let i = 0; i < params.length; i++) {
                 scopes[lscope].map.set(params[i], args[i] ?? new WaveGrassNull())
             }
-
             let ret_val;
             for (const i of func.__get_statements__()) {
                 ret_val = await run(i, lscope, depth_value + 1)
                 if (ret_val) break
             }
             scopes[lscope] = undefined
-
             WaveGrassError.trace.pop()
             return ret_val.value ?? new WaveGrassNull()
         }
@@ -510,11 +518,9 @@ const run = async (ast, scope, depth_value = 0) => {
             parent: scope,
             map: new Map()
         }
-
         if (ast.condition.type != 'operation') {
             ast.condition = { type: 'operation', value: [ast.condition] }
         }
-
         let br = false, cont = false, ret = false
         if ((await operate(ast.condition.value, scope)).__value_of__()) {
             for (const i of ast.positive) {
@@ -550,7 +556,6 @@ const run = async (ast, scope, depth_value = 0) => {
                             }
                         }
                     }
-
                 } else {
                     let v = await run(ast.negative, lscope, depth_value + 1)
                     if (v) {
@@ -564,30 +569,23 @@ const run = async (ast, scope, depth_value = 0) => {
                     }
                 }
             }
-
         }
-
         scopes[lscope] = undefined
-
         if (br) return { type: 'break' }
         if (cont) return { type: 'continue' }
         if (ret) return ret
     } else if (ast.type == 'for') {
         let lscope = 'for' + depth_value
-
         scopes[lscope] = {
             parent: scope,
             map: new Map()
         }
-
         if (ast.loopvar.type == 'assignment') {
             ast.loopvar = await run(ast.loopvar, lscope, depth_value)
         }
-
         if (ast.condition.type != 'operation') {
             ast.condition = { type: 'operation', value: [ast.condition] }
         }
-
         let out = false, ret = false
         while ((await operate(ast.condition.value, lscope)).__value_of__()) {
             for (const i of ast.block) {
@@ -604,13 +602,10 @@ const run = async (ast, scope, depth_value = 0) => {
                     }
                 }
             }
-
             if (out) break
             await operate(ast.change.value, lscope, depth_value)
         }
-
         scopes[lscope] = undefined
-
         if (ret) return ret.value
     } else if (ast.type == 'while') {
         let lscope = 'while' + depth_value
@@ -618,11 +613,9 @@ const run = async (ast, scope, depth_value = 0) => {
             parent: scope,
             map: new Map()
         }
-
         if (ast.condition.type != 'operation') {
             ast.condition = { type: 'operation', value: [ast.condition] }
         }
-
         let out = false, ret = false
         while ((await operate(ast.condition.value, scope)).__value_of__()) {
             for (const i of ast.block) {
@@ -643,7 +636,6 @@ const run = async (ast, scope, depth_value = 0) => {
             if (out) break
         }
         scopes[lscope] = undefined
-
         if (ret) return ret.value
     } else if (ast.type == 'return') {
         let s = scope
@@ -653,8 +645,6 @@ const run = async (ast, scope, depth_value = 0) => {
             if (s == 'global') throwError(new WaveGrassError('Syntax Error', 'Unexpcted token \'return\'', ast.line, ast.col))
             else break
         }
-
-
         return { type: 'return', value: ast.value.type == 'operation' ? await operate(ast.value.value, scope, depth_value) : ast.value }
     } else if (ast.type == 'break') {
         let br = find_scope_that_matches(scope, ...breakable)
@@ -662,7 +652,6 @@ const run = async (ast, scope, depth_value = 0) => {
         if (!br) {
             throwError(new WaveGrassError('Syntax Error', 'Unexpcted token \'break\'', ast.line, ast.col))
         }
-
         return { type: 'break' }
     } else if (ast.type == 'continue') {
         let br = find_scope_that_matches(scope, ...breakable)
@@ -670,10 +659,8 @@ const run = async (ast, scope, depth_value = 0) => {
         if (!br) {
             throwError(new WaveGrassError('Syntax Error', 'Unexpcted token \'continue\'', ast.line, ast.col))
         }
-
         return { type: 'continue' }
     }
-
 }
 
 /**

@@ -45,6 +45,7 @@ const precedence = (token) => {
         case '===':
         case '==':
         case '!=':
+        case '!==':
         case '<':
         case '>':
         case '>=':
