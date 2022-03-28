@@ -1,2 +1,4 @@
-a = prompt('why?: ')
-print(isNaN(a))
+a = print
+b -> print
+
+print(a == print, b == print)
