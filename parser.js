@@ -162,7 +162,6 @@ const parse_params = (tokens) => {
         if (tokens[i].value == ',') {
             let value = parse_operators(tokens.splice(0, i))
 
-            // if(value.token == 'missing') value = { type: }
             params.push(value)
             tokens.shift()
             i = 0

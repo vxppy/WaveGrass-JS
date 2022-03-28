@@ -207,6 +207,24 @@ const operate_by_operation = (opp, lhs, rhs) => {
         if (WaveGrassError.isError(value)) value = lhs.__r_b_or__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__r_b_or__(lhs)
         if (WaveGrassError.isError(value)) value = rhs.__b_or__(lhs)
+    } else if (cond.value == '<<') {
+        value = lhs.__b_l_shift__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_l_shift__(lhs)
+        if (WaveGrassError.isError(value)) value = lhs.__r_b_l_shift__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__r_b_l_shift__(lhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_l_shift__(lhs)
+    } else if (cond.value == '>>') {
+        value = lhs.__b_r_us_shift__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_r_us_shift__(lhs)
+        if (WaveGrassError.isError(value)) value = lhs.__r_b_r_us_shift__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__r_b_r_us_shift__(lhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_r_us_shift__(lhs)
+    } else if (cond.value == '>>>') {
+        value = lhs.__b_r_s_shift__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_r_s_shift__(lhs)
+        if (WaveGrassError.isError(value)) value = lhs.__r_b_r_s_shift__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__r_b_r_s_shift__(lhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_r_s_shift__(lhs)
     } else {
         value = new WaveGrassNull()
     }
