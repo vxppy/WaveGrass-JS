@@ -1,9 +1,10 @@
 const iterator = require("./iterator")
 const parse = require("./parser")
 const throwError = require("./throwError")
+const { WaveGrassError } = require("./wavegrassObjects")
 
 const keyword = [
-    "if", "else", "define", "catch", "try", "break", "return", "continue", "let", "const", "hoist", 'while', 'for'
+    "if", "else", "define", "catch", "try", "break", "return", "continue", "let", "const", "hoist", 'while', 'for', 'in'
 ]
 const brackets_map = {
     '()': 0,
@@ -17,20 +18,7 @@ const char_map = {
     '\\': '\\'
 }
 
-// /**
-//  * 
-//  * @returns { number }
-//  */
-// const brackets_map_sum = () => {
-//     let sum = 0
-//     for (const i in brackets_map) {
-//         sum += brackets_map[i]
-//     }
-//     return sum
-// }
-
 let brackets_map_key = Object.keys(brackets_map)
-
 
 /**
  * 
@@ -42,7 +30,7 @@ let brackets_map_key = Object.keys(brackets_map)
  * 
  * @returns { { type: string, value: string } }
  */
-const parseDelim = (iterable, delim, type = 'string', line, col, filedata) => {
+const parseDelim = (iterable, delim, type = 'string', line, col) => {
     let ret = []
     let change = 0
     let prev
@@ -65,7 +53,7 @@ const parseDelim = (iterable, delim, type = 'string', line, col, filedata) => {
     }
 
     if (!iterable.next()) {
-        throwError('EOF Error', 'Unexpected end of file', filedata, line, col)
+        throwError(new WaveGrassError('EOF Error', 'Unexpected end of file', line, col))
     }
     // console.log(iterable.next())
 
@@ -85,7 +73,7 @@ const parseDelim = (iterable, delim, type = 'string', line, col, filedata) => {
  * 
  * @returns { { type: 'number', value: number, line: number, col: number } }
  */
-const parseNum = (iterable, current, dot = false, line, col, filedata) => {
+const parseNum = (iterable, current, dot = false, line, col) => {
     let ret = [current]
     let change = 0
 
@@ -96,7 +84,7 @@ const parseNum = (iterable, current, dot = false, line, col, filedata) => {
 
         if (dot) {
             if (curr == '.') {
-                throwError('Syntax Error', 'Unexpected property accessor', filedata, line, col)
+                throwError(new WaveGrassError('Syntax Error', 'Unexpected property accessor', line, col))
             }
         } else {
             if (curr == '.') dot = true
@@ -151,12 +139,18 @@ const parseName = (iterable, current, line, col) => {
  * @returns { boolean }
  */
 const lex = (fileContent, file) => {
+
+    // throw new Error()
     let line = 1, col = 0
     let iter = iterator(fileContent)
     let filedata = {
         lines: fileContent.split('\n'),
         file: file
     }
+
+    WaveGrassError.lines = filedata.lines
+    WaveGrassError.file = file
+
     /** @type { import("./parser").Token[] } */
     let tokens = []
 
@@ -166,12 +160,13 @@ const lex = (fileContent, file) => {
 
         if (curr == '\n') {
             line++
-            col = 1
+            col = 0
             if (tokens.length) {
                 let next = ' ';
                 while (next == ' ') {
                     next = iter.next()
                     if (next != ' ') break
+                    col++
                     iter.move()
                 }
                 let prev = tokens[tokens.length - 1]
@@ -181,7 +176,7 @@ const lex = (fileContent, file) => {
                 }
             }
         } else if (/[0-9]/.test(curr)) {
-            let value = parseNum(iter, curr, false, line, col, filedata)
+            let value = parseNum(iter, curr, false, line, col)
             col += value.change
             tokens.push(value.data)
         } else if (/[#_a-zA-Z]/.test(curr)) {
@@ -189,12 +184,12 @@ const lex = (fileContent, file) => {
             col += value.change
             tokens.push(value.data)
         } else if ('"\'`'.includes(curr)) {
-            let value = parseDelim(iter, curr, 'string', line, col, filedata)
+            let value = parseDelim(iter, curr, 'string', line, col)
             col += value.change
             tokens.push(value.data)
         } else if (curr == '.') {
             if (/[0-9]/.test(iter.next())) {
-                let value = parseNum(iter, curr, true, line, col, filedata)
+                let value = parseNum(iter, curr, true, line, col)
                 col += value.change
                 tokens.push(value.data)
             } else {
@@ -204,21 +199,17 @@ const lex = (fileContent, file) => {
             tokens.push({ type: 'symbol', value: curr, line: line, col: col })
         } else if ('=' == curr) {
             if (iter.next() == '=') {
-                tokens.push({ type: 'comparator', value: '==', line: line, col: col })
                 iter.move()
+                if(iter.next() == '=') {
+                    iter.move()
+                    tokens.push({ type: 'comparator', value: '===', line: line, col: col })   
+                }
+                else tokens.push({ type: 'comparator', value: '==', line: line, col: col })
                 col++
             } else {
                 tokens.push({ type: 'assignment', value: '=', line: line, col: col })
             }
-        } else if ('^~!'.includes(curr)) {
-            if (iter.next() == '=') {
-                tokens.push({ type: 'assignment', value: curr + '=', line: line, col: col })
-                iter.move()
-                col++
-            } else {
-                tokens.push({ type: 'operator', value: curr })
-            }
-        } else if ('+*%'.includes(curr)) {
+        } else if ('+*%~!^'.includes(curr)) {
             if (iter.next() == '=') {
                 tokens.push({ type: 'assignment', value: curr + '=', line: line, col: col })
                 iter.move()
@@ -228,8 +219,7 @@ const lex = (fileContent, file) => {
                 iter.move()
                 col++
             }
-            else
-                tokens.push({ type: 'operator', value: curr, line: line, col: col })
+            else tokens.push({ type: 'operator', value: curr, line: line, col: col })
         } else if ('&|'.includes(curr)) {
             if (iter.next() == '=') {
                 tokens.push({ type: 'assignment', value: curr + '=', line: line, col: col })
@@ -274,16 +264,16 @@ const lex = (fileContent, file) => {
             else if (iter.next() == curr) {
                 while (iter.next() != '\n') {
                     iter.move()
+                    line++
+                    col = 0
                 }
-                line++
-                col = 0
                 iter.move()
             } else if (iter.next() == '*') {
                 while (true) {
                     col++
                     let curr = iter.next()
                     if (!curr) {
-                        throwError('EOF Error', 'Unexpected end of file', filedata, line, col)
+                        throwError(new WaveGrassError('EOF Error', 'Unexpected end of file', line, col))
                     }
                     iter.move()
                     if (curr == '*' && iter.next() == '/') {
@@ -303,8 +293,8 @@ const lex = (fileContent, file) => {
         } else if (curr == '-') {
             if (iter.next() == '>') {
                 iter.move()
-                col++
                 tokens.push({ type: 'assignment', value: '->', line: line, col: col })
+                col++
             } else if (iter.next() == '=') {
                 tokens.push({ type: 'assignment', value: curr + '=', line: line, col: col })
                 iter.move()
@@ -324,6 +314,39 @@ const lex = (fileContent, file) => {
         if (tokens[tokens.length - 1].type != 'delim') tokens.push({ type: 'delim', value: ';', line: line, col: col })
     }
 
+    if (brackets_map['()']) {
+        for (let i = 0; i < tokens.length; i++) {
+            if ('()'.includes(tokens[i].value)) {
+                if (tokens[i].depth == brackets_map['()']) {
+                    throwError(new WaveGrassError('Syntax Error', 'Unmatched Paranthesis', tokens[i].col, tokens[i].line))
+                } else if (tokens[i].depth == brackets_map['()'] + 1) {
+                    throwError(new WaveGrassError('Syntax Error', 'Unmatched Paranthesis', tokens[i].col, tokens[i].line))
+                }
+            }
+        }
+    }
+    if (brackets_map['[]']) {
+        for (let i = 0; i < tokens.length; i++) {
+            if ('[]'.includes(tokens[i].value)) {
+                if (tokens[i].depth == brackets_map['[]']) {
+                    throwError(new WaveGrassError('Syntax Error', 'Unmatched Square Brackets', tokens[i].col, tokens[i].line))
+                } else if (tokens[i].depth == brackets_map['[]'] + 1) {
+                    throwError(new WaveGrassError('Syntax Error', 'Unmatched  Square Brackets', tokens[i].col, tokens[i].line))
+                }
+            }
+        }
+    }
+    if (brackets_map['{}']) {
+        for (let i = 0; i < tokens.length; i++) {
+            if ('[]'.includes(tokens[i].value)) {
+                if (tokens[i].depth == brackets_map['{}']) {
+                    throwError(new WaveGrassError('Syntax Error', 'Unmatched Curly Brackets', tokens[i].col, tokens[i].line))
+                } else if (tokens[i].depth == brackets_map['{}'] + 1) {
+                    throwError(new WaveGrassError('Syntax Error', 'Unmatched Curly Brackets', tokens[i].col, tokens[i].line))
+                }
+            }
+        }
+    }
     for (let i = 0; i < tokens.length; i++) {
         if (tokens[i].value == 'else') {
             if (tokens[i - 1].value == ';' && tokens[i - 2].value == '}') {
@@ -331,9 +354,15 @@ const lex = (fileContent, file) => {
                 i--
             }
         }
+
+        if (tokens[i].type == 'variable') {
+            if (tokens[i + 1] && tokens[i + 1].type == 'variable') {
+                throwError(new WaveGrassError('Syntax Error', 'Unxpected variable after another variable', tokens[i + 1].col, tokens[i + 1].line))
+            }
+        }
     }
 
-    parse({ tokens: tokens, filedata: filedata })
+    parse(tokens)
     return true
 }
 

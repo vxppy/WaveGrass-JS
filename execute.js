@@ -23,6 +23,8 @@ let globalDepth = 3
 scopes['global'].map.set('print', print)
 scopes['global'].map.set('prompt', prompt)
 
+const unary = ['!', '~', '!!', '~~']
+
 const toString = async (tokens, sep, scope, depth = 0) => {
     tokens = tokens.map(i => i instanceof WaveGrassObject ? i : createObject(i.type, i.value))
     let str = []
@@ -36,7 +38,7 @@ const toString = async (tokens, sep, scope, depth = 0) => {
             } else if (tokens[i].type == 'variable') {
                 let value = getValueOfVariable(tokens[i], scope)
                 if (value.type != 'nf') {
-                    str.push(await toString([value], sep, scope, depth, filedata))
+                    str.push(await toString([value], sep, scope, depth))
                 }
 
             } else str.push(tokens[i].__value_of__())
@@ -54,68 +56,50 @@ const toString = async (tokens, sep, scope, depth = 0) => {
  * @returns { WaveGrassBoolean }
  */
 const conditional_check = (cond, lhs, rhs) => {
-    if (cond.value == '==') {
-        let value = lhs.__equals__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__equals__(lhs)
-
-        if (!value) throwError()
-        else if (WaveGrassError.isError(value)) throwError()
-        return value
+    let value = null;
+    if (cond.value == '===') {
+        value = lhs.__strict_equals__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__strict_equals__(lhs)
+    } else if (cond.value == '==') {
+        value = lhs.__equals__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__equals__(lhs)
     } else if (cond.value == '>') {
-        let value = lhs.__greater_than__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__greater_than__(lhs)
-
-        if (!value) throwError()
-        else if (WaveGrassError.isError(value)) throwError()
-        return value
+        value = lhs.__greater_than__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__greater_than__(lhs)
     } else if (cond.value == '<') {
-        let value = lhs.__less_than__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__less_than__(lhs)
-
-        if (!value) throwError()
-        else if (WaveGrassError.isError(value)) throwError()
-        return value
+        value = lhs.__less_than__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__less_than__(lhs)
     } else if (cond.value == '>=') {
-        let value = lhs.__greater_than__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__greater_than__(lhs)
-
-        if (!value) throwError()
-        else if (WaveGrassError.isError(value)) throwError()
+        value = lhs.__greater_than__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__greater_than__(lhs)
 
         if (value.__value_of__() == false) {
-            let value = lhs.__equals__(rhs)
-            if (!value || WaveGrassError.isError(value)) value = rhs.__equals__(lhs)
-
-            if (!value) throwError()
-            else if (WaveGrassError.isError(value)) throwError()
-            else return value
+            value = lhs.__equals__(rhs)
+            if (WaveGrassError.isError(value)) value = rhs.__equals__(lhs)
         }
-
-        return value
     } else if (cond.value == '<=') {
-        let value = lhs.__less_than__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__less_than__(lhs)
-
-        if (!value) throwError()
-        else if (WaveGrassError.isError(value)) throwError()
+        value = lhs.__less_than__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__less_than__(lhs)
 
         if (value.__value_of__() == false) {
-            let value = lhs.__equals__(rhs)
-            if (!value || WaveGrassError.isError(value)) value = rhs.__equals__(lhs)
-
-            if (!value) throwError()
-            else if (WaveGrassError.isError(value)) throwError()
-            else return value
+            value = lhs.__equals__(rhs)
+            if (WaveGrassError.isError(value)) value = rhs.__equals__(lhs)
         }
-
-        return value
+    } else if (cond.value == '&&') {
+        value = WaveGrassBoolean(lhs.__bool__().__value_of__() && rhs.__bool__().__value_of__())
+    } else if (cond.value == '||') {
+        value = new WaveGrassBoolean(lhs.__bool__().__value_of__() || rhs.__bool__().__value_of__())
     } else {
-        if (cond.value == '&&') {
-            return new WaveGrassBoolean(lhs.__bool__() && rhs.__bool__())
-        } else if (cond.value == '||') {
-            return new WaveGrassBoolean(lhs.__bool__() || rhs.__bool__())
-        }
+        value = new WaveGrassBoolean(false)
     }
+
+    if (WaveGrassError.isError(value)) {
+        value.__col = opp.col
+        value.__line = opp.line
+        throwError(value)
+    }
+
+    return value
 }
 
 /*
@@ -131,64 +115,44 @@ TODO
  * @returns { WaveGrassObject }
  */
 const operate_by_operation = (opp, lhs, rhs) => {
-    if (opp.value == '=') {
 
-    }
-
+    let value = null
     if (opp.value == '+') {
-        let value = lhs.__add__(rhs);
-        if (!value || WaveGrassError.isError(value)) value = lhs.__r_add__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__r_add__(lhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__add__(lhs)
+        value = lhs.__add__(rhs);
+        if (WaveGrassError.isError(value)) value = lhs.__r_add__(lhs)
+        if (WaveGrassError.isError(value)) value = rhs.__r_add__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__add__(rhs)
 
-        if (!value) throwError()
-        else if (WaveGrassError.isError(value)) throwError()
-        return value
     } else if (opp.value == '-') {
-        let value = lhs.__sub__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = lhs.__r_sub__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__r_sub__(lhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__sub__(lhs)
-
-        if (!value) throwError()
-        else if (WaveGrassError.isError(value)) throwError()
-        return value
+        value = lhs.__sub__(rhs)
+        if (WaveGrassError.isError(value)) value = lhs.__r_sub__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__r_sub__(lhs)
+        if (WaveGrassError.isError(value)) value = rhs.__sub__(lhs)
     } else if (opp.value == '*') {
-        let value = lhs.__mul__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = lhs.__r_mul__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__r_mul__(lhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__mul__(lhs)
+        value = lhs.__mul__(rhs)
+        if (WaveGrassError.isError(value)) value = lhs.__r_mul__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__r_mul__(lhs)
+        if (WaveGrassError.isError(value)) value = rhs.__mul__(lhs)
 
-        if (!value) throwError()
-        else if (WaveGrassError.isError(value)) throwError()
-        return value
     } else if (opp.value == '/') {
-        let value = lhs.__div__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = lhs.__r_div__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__r_div__(lhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__div__(lhs)
+        value = lhs.__div__(rhs)
+        if (WaveGrassError.isError(value)) value = lhs.__r_div__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__r_div__(lhs)
+        if (WaveGrassError.isError(value)) value = rhs.__div__(lhs)
 
-        if (!value) throwError()
-        else if (WaveGrassError.isError(value)) throwError()
-        return value
     } else if (opp.value == '%') {
-        let value = lhs.__mod__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = lhs.__r_mod__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__r_mod__(lhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__mod__(lhs)
-
-        if (!value) throwError()
-        else if (WaveGrassError.isError(value)) throwError()
-        return value
-    } else if (opp.value == '|') {
-        let value = lhs.__b_or__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = lhs.__r_b_or__(rhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__r_b_or__(lhs)
-        if (!value || WaveGrassError.isError(value)) value = rhs.__b_or__(lhs)
-
-        if (!value) throwError()
-        else if (WaveGrassError.isError(value)) throwError()
-        return value
+        value = lhs.__mod__(rhs)
+        if (WaveGrassError.isError(value)) value = lhs.__r_mod__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__r_mod__(lhs)
+        if (WaveGrassError.isError(value)) value = rhs.__mod__(lhs)
+    } else if (opp.value == '!') {
+        value = lhs.__not__()
+    } else if (opp.value == '!!') {
+        value = lhs.__bool__()
+    } else if (opp.value == '~') {
+        value = lhs.__b_not__()
+    } else if (opp.value == '~~') {
+        value = lhs.__b_not__().__b_not__()
     } else if (opp.value == '++') {
         if (rhs) {
             let old_value = createObject(rhs.__type__(), rhs.__value_of__())
@@ -211,8 +175,36 @@ const operate_by_operation = (opp, lhs, rhs) => {
             lhs.__value = lhs.__sub__(new WaveGrassNumber(1)).__value_of__()
             return lhs
         }
+    } else if (cond.value == '&') {
+        value == lhs.__b_and__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_and__(lhs)
+        if (WaveGrassError.isError(value)) value = lhs.__r_b_and__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__r_b_and__(lhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_and__(lhs)
+    } else if (cond.value == '^') {
+        value == lhs.__b_xor__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_xor__(lhs)
+        if (WaveGrassError.isError(value)) value = lhs.__r_b_xor__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__r_b_xor__(lhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_xor__(lhs)
+    } else if (cond.value == '|') {
+        value = lhs.__b_or__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_or__(lhs)
+        if (WaveGrassError.isError(value)) value = lhs.__r_b_or__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__r_b_or__(lhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_or__(lhs)
+    } else {
+        value = new WaveGrassNull()
     }
-    return new WaveGrassNull()
+
+    if (WaveGrassError.isError(value)) {
+        value.__col = opp.col
+        value.__line = opp.line
+        throwError(value)
+    }
+    return value
+
+    // return 
 }
 
 /*
@@ -228,17 +220,25 @@ TODO
  * @param { { lines: string[], file: string } } filedata 
  * @returns { Promise<WaveGrassObject> }
  */
-const operate = async (ast, scope, depth = 0, filedata) => {
+const operate = async (ast, scope, depth = 0) => {
     ast = structuredClone(ast)
     let values = []
 
     for (let i = 0; i < ast.length; i++) {
         if (ast[i].type == 'operator') {
-            let rhs = values.pop(), lhs = values.pop()
-            values.push(operate_by_operation(ast[i], lhs, rhs))
-        } else if (ast[i].type == 'comparator') {
-            let rhs = values.pop(), lhs = values.pop()
-            values.push(conditional_check(ast[i], lhs, rhs))
+            if (unary.includes(ast[i].value)) {
+                let value = values.pop()
+                values.push(operate_by_operation(ast[i], value))
+            } else {
+                let rhs = values.pop(), lhs = values.pop()
+                values.push(operate_by_operation(ast[i], lhs, rhs))
+            }
+        } else if (ast[i].type == 'comparator' || ast[i].type == 'keyword') {
+            if (unary.includes(ast[i].value)) {
+            } else {
+                let rhs = values.pop(), lhs = values.pop()
+                values.push(conditional_check(ast[i], lhs, rhs))
+            }
         } else if (ast[i].type == 'symbol') {
             if (ast[i].value == ':') {
                 let rhs = values.pop(), lhs = values.pop()
@@ -246,7 +246,7 @@ const operate = async (ast, scope, depth = 0, filedata) => {
             }
         } else {
             if (ast[i].type == 'call') {
-                ast[i] = await run(ast[i], scope, depth, filedata)
+                ast[i] = await run(ast[i], scope, depth)
             } else if (ast[i].type == 'variable') {
                 if (ast[i + 2]) {
                     if (ast[i + 2].value != ':') {
@@ -318,18 +318,18 @@ const find_scope_that_matches = (start, ...values) => {
     return
 }
 
-const parse_params = async (tokens, scope, depth = 0, filedata) => {
+const parse_params = async (tokens, scope, depth = 0) => {
     let args = []
     for (const i of tokens) {
         if (i.type == 'operation') {
-            let operated = await operate(i.value, scope, depth, filedata)
+            let operated = await operate(i.value, scope, depth)
             if (operated.type) {
                 if (operated.type == 'property') {
                     if (operated.rhs.type == 'variable') {
                         let value = getValueOfVariable(i, scope)
 
                         if (value.type == 'nf') {
-                            throwError(`Reference Error`, `'${i.value}' is not defined`, filedata, i.line, i.col)
+                            throwError(`Reference Error`, `'${i.value}' is not defined`, i.line, i.col)
                         }
 
                         args[operated.lhs.value] = value
@@ -348,17 +348,19 @@ const parse_params = async (tokens, scope, depth = 0, filedata) => {
                 let value = getValueOfVariable(i, scope)
 
                 if (value.type == 'nf') {
-                    throwError(`Reference Error`, `'${i.value}' is not defined`, filedata, i.line, i.col)
+                    throwError(new WaveGrassError(`Reference Error`, `'${i.value}' is not defined`, i.line, i.col))
                 }
 
                 args.push(value)
             } else if (i.type == 'call') {
-                args.push(await run(i, scope, depth, filedata))
+                args.push(await run(i, scope, depth))
             } else {
                 if (i.type == 'array') {
                     for (let j = 0; j < i.values.length; j++) {
-                        i[j] = await parse_params(i[j], scope, depth, filedata)
+                        i[j] = await parse_params(i[j], scope, depth)
                     }
+                } else if (i.token == 'missing') {
+                    args.push(new WaveGrassNull())
                 } else {
                     if (!(i instanceof WaveGrassObject)) args.push(createObject(i.type, i.value))
                     else args.push(i)
@@ -374,24 +376,23 @@ const parse_params = async (tokens, scope, depth = 0, filedata) => {
  * @param { { type: string, [x:string]: {} } } ast 
  * @param { string } scope 
  * @param { number } depth_value 
- * @param { { lines: string[], file: string } } filedata 
  * @returns 
  */
-const run = async (ast, scope, depth_value = 0, filedata) => {
+const run = async (ast, scope, depth_value = 0) => {
     ast = structuredClone(ast)
 
     if (ast.type == 'assignment') {
-        let scp = find_variable_scope(ast.lhs, scope, filedata)
+        let scp = find_variable_scope(ast.lhs, scope)
 
         if (ast.rhs.type == 'operation') {
-            let value = await operate(ast.rhs.value, scope, depth_value, filedata)
+            let value = await operate(ast.rhs.value, scope, depth_value)
             if (!scp) scopes[scope].map.set(ast.lhs.value, value)
             else scopes[scp].map.set(ast.lhs.value, value)
         } else {
             if (ast.rhs.type == 'variable') {
                 let value = getValueOfVariable(ast.rhs, scope)
                 if (value.type == 'nf') {
-                    throwError(`Reference Error`, `'${ast.lhs.value}' is not defined`, filedata, ast.lhs.line, ast.lhs.col)
+                    throwError(new WaveGrassError(`Reference Error`, `'${ast.lhs.value}' is not defined`, ast.lhs.line, ast.lhs.col))
                 }
 
                 if (value.__type__() == 'method') {
@@ -418,17 +419,17 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
         }
 
         return ast.lhs
-    } else if(ast.type == 'assignment2') {
-        let scp = find_variable_scope(ast.lhs, scope, filedata)
+    } else if (ast.type == 'assignment2') {
+        let scp = find_variable_scope(ast.lhs, scope)
         if (ast.rhs.type == 'operation') {
-            let value = await operate(ast.rhs.value, scope, depth_value, filedata)
+            let value = await operate(ast.rhs.value, scope, depth_value)
             if (!scp) scopes[scope].map.set(ast.lhs.value, value)
             else scopes[scp].map.set(ast.lhs.value, value)
         } else {
             if (ast.rhs.type == 'variable') {
                 let value = getValueOfVariable(ast.rhs, scope)
                 if (value.type == 'nf') {
-                    throwError(`Reference Error`, `'${ast.lhs.value}' is not defined`, filedata, ast.lhs.line, ast.lhs.col)
+                    throwError(new WaveGrassError(`Reference Error`, `'${ast.lhs.value}' is not defined`, ast.lhs.line, ast.lhs.col))
                 }
 
                 if (!scp) scopes[scope].map.set(ast.lhs.value, value)
@@ -444,16 +445,18 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
                 else scopes[scp].map.set(ast.lhs.value, createObject(ast.rhs.type, ast.rhs.value))
             }
         }
-    }else if (ast.type == 'call') {
+    } else if (ast.type == 'call') {
         const func = getValueOfVariable(ast.value, scope)
 
+        WaveGrassError.trace.push(`at ${func.__name__().__value_of__()} (${WaveGrassError.file}:${ast.value.line}:${ast.value.col})`)
+
         if (func.type == 'nf') {
-            throwError(`Reference Error`, `'${ast.value.value}' is not defined`, filedata, ast.value.line, ast.value.col)
+            throwError(new WaveGrassError(`Reference Error`, `'${ast.value.value}' is not defined`, ast.value.line, ast.value.col))
         } else if (func.__type != 'method') {
-            throwError(`Reference Error`, `'${ast.value.value}' is not a method`, filedata, ast.value.line, ast.value.col)
+            throwError(new WaveGrassError(`Reference Error`, `'${ast.value.value}' is not a method`, ast.value.line, ast.value.col))
         }
 
-        let args = await parse_params(ast.args, scope, depth_value, filedata)
+        let args = await parse_params(ast.args, scope, depth_value)
 
         if (func.__internal__()) {
             let internal_type = func.__get_statements__()
@@ -462,8 +465,10 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
                 let end = args.end?.__value_of__() ?? '\n'
                 process.stdout.write(`${await toString(args, sep, scope)}${end}`)
 
+                WaveGrassError.trace.pop()
                 return new WaveGrassNull()
             } else if (internal_type == '<internal_prompt>') {
+                WaveGrassError.trace.pop()
                 return createObject('string', await input(await toString(params, '', scope)))
             }
         } else {
@@ -491,12 +496,12 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
 
             let ret_val;
             for (const i of func.__get_statements__()) {
-                ret_val = await run(i, lscope, depth_value + 1, filedata)
+                ret_val = await run(i, lscope, depth_value + 1)
                 if (ret_val) break
             }
-
             scopes[lscope] = undefined
 
+            WaveGrassError.trace.pop()
             return ret_val.value ?? new WaveGrassNull()
         }
     } else if (ast.type == 'if') {
@@ -511,9 +516,9 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
         }
 
         let br = false, cont = false, ret = false
-        if ((await operate(ast.condition.value, scope, filedata)).__value_of__()) {
+        if ((await operate(ast.condition.value, scope)).__value_of__()) {
             for (const i of ast.positive) {
-                let v = await run(i, lscope, depth_value + 1, filedata)
+                let v = await run(i, lscope, depth_value + 1)
                 if (v) {
                     if (v.type == 'break') {
                         br = true
@@ -531,7 +536,7 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
             if (ast.negative) {
                 if (Array.isArray(ast.negative)) {
                     for (const i of ast.negative) {
-                        let v = await run(i, lscope, depth_value + 1, filedata)
+                        let v = await run(i, lscope, depth_value + 1)
                         if (v) {
                             if (v.type == 'break') {
                                 br = true
@@ -547,7 +552,7 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
                     }
 
                 } else {
-                    let v = await run(ast.negative, lscope, depth_value + 1, filedata)
+                    let v = await run(ast.negative, lscope, depth_value + 1)
                     if (v) {
                         if (v.type == 'break') {
                             br = true
@@ -575,9 +580,8 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
             map: new Map()
         }
 
-
         if (ast.loopvar.type == 'assignment') {
-            ast.loopvar = await run(ast.loopvar, lscope, depth_value, filedata)
+            ast.loopvar = await run(ast.loopvar, lscope, depth_value)
         }
 
         if (ast.condition.type != 'operation') {
@@ -585,9 +589,9 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
         }
 
         let out = false, ret = false
-        while ((await operate(ast.condition.value, lscope, filedata)).__value_of__()) {
+        while ((await operate(ast.condition.value, lscope)).__value_of__()) {
             for (const i of ast.block) {
-                let v = await run(i, lscope, depth_value + 1, filedata)
+                let v = await run(i, lscope, depth_value + 1)
                 if (v) {
                     if (v.type == 'break') {
                         out = true
@@ -602,7 +606,7 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
             }
 
             if (out) break
-            await operate(ast.change.value, lscope, depth_value, filedata)
+            await operate(ast.change.value, lscope, depth_value)
         }
 
         scopes[lscope] = undefined
@@ -620,9 +624,9 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
         }
 
         let out = false, ret = false
-        while ((await operate(ast.condition.value, scope, filedata)).__value_of__()) {
+        while ((await operate(ast.condition.value, scope)).__value_of__()) {
             for (const i of ast.block) {
-                let v = await run(i, lscope, depth_value + 1, filedata)
+                let v = await run(i, lscope, depth_value + 1)
                 if (v) {
                     if (v.type == 'break') {
                         out = true
@@ -646,17 +650,17 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
         while (s) {
             if (['for', 'while', 'if'].find(i => s.startsWith(i))) s = scopes[s].parent
 
-            if (s == 'global') throwError('Syntax Error', 'Unexpcted token \'return\'', filedata, ast.line, ast.col)
+            if (s == 'global') throwError(new WaveGrassError('Syntax Error', 'Unexpcted token \'return\'', ast.line, ast.col))
             else break
         }
 
 
-        return { type: 'return', value: ast.value.type == 'operation' ? await operate(ast.value.value, scope, depth_value, filedata) : ast.value }
+        return { type: 'return', value: ast.value.type == 'operation' ? await operate(ast.value.value, scope, depth_value) : ast.value }
     } else if (ast.type == 'break') {
         let br = find_scope_that_matches(scope, ...breakable)
 
         if (!br) {
-            throwError('Syntax Error', 'Unexpcted token \'break\'', filedata, ast.line, ast.col)
+            throwError(new WaveGrassError('Syntax Error', 'Unexpcted token \'break\'', ast.line, ast.col))
         }
 
         return { type: 'break' }
@@ -664,7 +668,7 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
         let br = find_scope_that_matches(scope, ...breakable)
 
         if (!br) {
-            throwError('Syntax Error', 'Unexpcted token \'continue\'', filedata, ast.line, ast.col)
+            throwError(new WaveGrassError('Syntax Error', 'Unexpcted token \'continue\'', ast.line, ast.col))
         }
 
         return { type: 'continue' }
@@ -674,13 +678,13 @@ const run = async (ast, scope, depth_value = 0, filedata) => {
 
 /**
  * 
- * @param { { asts: import("./parser").Token[], filedata: { lines: string[], name: string } } } tokens 
+ * @param { import("./parser").Token[] } tokens 
  */
 const execute = async (tokens, scope = 'global', depth_value = 0) => {
     let hoists = []
-    for (let i = 0; i < tokens.asts.length; i++) {
-        if (tokens.asts[i]?.type == 'hoist') {
-            hoists.push(tokens.asts.splice(i, 1)[0].value)
+    for (let i = 0; i < tokens.length; i++) {
+        if (tokens[i]?.type == 'hoist') {
+            hoists.push(tokens.splice(i, 1)[0].value)
             i--
         }
     }
@@ -689,7 +693,7 @@ const execute = async (tokens, scope = 'global', depth_value = 0) => {
         await run(i, scope, depth_value, tokens.filedata)
     }
 
-    for (const i of tokens.asts) {
+    for (const i of tokens) {
         await run(i, scope, depth_value, tokens.filedata)
     }
 }
