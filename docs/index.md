@@ -1,6 +1,6 @@
 # Wavegrass Documentation
 
-##Introduction
+## Introduction
 ---
 ```wg
 print('Hello', 'world', sep: ', ', end: '!')
