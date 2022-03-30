@@ -1,4 +1,4 @@
-a = print
-b -> print
-
-print(a == print, b == print)
+a = 2
+a ||= 3
+print(a)
+print(a && null)
