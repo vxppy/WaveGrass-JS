@@ -16,16 +16,20 @@ const precedence = (token) => {
         case ':':
         case '=':
             return 10
-        case '[':
+        case '.':
             return 9
         case '**':
         case '++':
+        case '_++':
+        case '_--':
         case '--':
             return 8
         case '!':
         case '!!':
         case '~~':
         case '~':
+        case '_+':
+        case '_-':
             return 7
         case '*':
         case '/':
@@ -59,7 +63,7 @@ const precedence = (token) => {
 
     return -1
 }
-const non_operator_types = ['number', 'string', 'array', 'boolean', 'call', 'variable']
+const non_operator_types = ['number', 'string', 'array', 'boolean', 'variable', 'call', 'null']
 
 /**
  * 
@@ -99,7 +103,6 @@ const accumulate_tokens = (iterable, endat) => {
 const to_post_fix_notation = (array) => {
     let stack = []
     let result = []
-
     for (let i = 0; i < array.length; i++) {
         let token = array[i]
 
@@ -109,27 +112,62 @@ const to_post_fix_notation = (array) => {
                 for (let j = i + 2; j < array.length; j++) {
                     if (array[j].type == 'bracket' && array[j].value == ')' && array[j].depth == array[i + 1].depth) {
                         foundIndex = j
+                        break
                     }
                 }
 
-                if (!foundIndex) {
-                    throwError(new WaveGrassError('EOF Error', 'Unexpected end of input', array[i + 1].col, array[i - 1].col))
+                if (foundIndex < 0) {
+                    throwError(new WaveGrassError('EOF Error', 'Unexpected end of input', array[i + 1].col, array[i - 1].line))
                 }
 
-                array.splice(i, 3, {
-                    type: 'call', value: array[i],
-                    args: parse_params(array.splice(i + 2, foundIndex - i - 2))
+                array.splice(i + 1, 2, {
+                    type: 'call', args: parse_params(array.splice(i + 2, foundIndex - i - 2)), col: array[i].col, line: array[i].line
                 })
-                i--
-            } else result.push(token)
-        } else if (token.type == 'bracket' && token.value == '(') {
-            stack.push(token)
-        } else if (token.type == 'bracket' && token.value == ')') {
-            while (stack[stack.length - 1].value != '(' && stack[stack.length - 1] != token.depth) {
-                result.push(stack.pop())
             }
-            stack.pop()
+            result.push(token)
+        } else if (token.type == 'bracket') {
+            if(token.value == '(') stack.push(token)
+            else if (token.value == ')') {
+                while (stack[stack.length - 1].value != '(' && stack[stack.length - 1] != token.depth) {
+                    result.push(stack.pop())
+                }
+                stack.pop()
+           
+            } else if(token.value == '[') {
+                let foundIndex = -1
+                for (let j = i + 1; j < array.length; j++) {
+                    if (array[j].type == 'bracket' && array[j].value == ']' && array[j].depth == array[i].depth) {
+                        foundIndex = j
+                        break
+                    }
+                } 
+
+                if (foundIndex < 0) {
+                    throwError(new WaveGrassError('EOF Error', 'Unexpected end of input', array[i].col, array[i].line))
+                }
+
+                array.splice(i, 2, {
+                    type: 'array', values: parse_array(array.splice(i + 1, foundIndex - i - 1)), col: array[i].col, line: array[i].line
+                })
+
+                result.push(array[i])
+            }
         } else {
+            if (['-', '+'].includes(token.value) && array[i + 1]) {
+                if (!array[i - 1]) {
+                    token.value = '_' + token.value
+                } else if (['operator', 'keyword', 'comparator'].includes(array[i - 1].type)) {
+                    token.value = '_' + token.value
+                } else if (array[i - 1].value == '(') {
+                    token.value = '_' + token.value
+                }
+
+            } else if (['++', '--'].includes(token.value)) {
+                if (!array[i + 1] || ['operator', 'keyword', 'comparator', 'bracket'].includes(array[i + 1].type)) {
+                    token.value = '_' + token.value
+                }
+            }
+
             while (stack.length && precedence(token) <= precedence(stack[stack.length - 1])) {
                 result.push(stack.pop())
             }
@@ -139,6 +177,16 @@ const to_post_fix_notation = (array) => {
 
     while (stack.length) {
         result.push(stack.pop())
+    }
+
+    for (let i = 0; i < result.length; i++) {
+        if (result[i].value == '.') {
+            if (result[i - 1] && result[i - 1].type == 'call') {
+                let temp = result[i]
+                result[i] = result[i - 1]
+                result[i - 1] = temp
+            }
+        }
     }
 
     return result
@@ -158,98 +206,74 @@ const parse_operators = (array) => {
 const parse_params = (tokens) => {
     let params = []
     let i = 0;
+    let depths = {
+        '(': 0,
+        '[': 0,
+        '{': 0
+    }
+
     while (tokens.length) {
-        if (tokens[i].value == ',') {
+        if (tokens[i].value == ',' && !Object.values(depths).reduce((a, b) => a + b, 0)) {
             let value = parse_operators(tokens.splice(0, i))
 
             params.push(value)
             tokens.shift()
-            i = 0
-        } else if (tokens[i].value == '(') {
-            let i2 = -1
-            for (let j = i + 1; j < tokens.length; j++) {
-                if (tokens[j].value == ')' && tokens[j].depth == tokens[i].depth) {
-                    i2 = j
-                    break
-                }
-            }
-            if (i2 == -1) {
-                throwError(new WaveGrassError('EOF Error', 'Unexpected End of file', params[0].line, params[0].col))
-            }
 
-            if (tokens?.[i - 1] && (tokens[i - 1]?.operation == 'brackets' || ['variable', 'number', 'string'].includes(tokens[i - 1].type))) {
-                tokens.splice(i - 1, 3,
-                    {
-                        type: 'call', value: tokens[i - 1],
-                        args: parse_params(tokens.splice(i + 1, i2 - i - 1))
-                    })
-                i -= 2
-            } else {
-                tokens.splice(i, 2, parse_operators(tokens.splice(i + 1, i2 - i - 1)))
-                i--
-            }
             i = 0
-        } else {
-            i++
         }
 
-        if (tokens[i]?.value == '.') {
-            let r = parse_params(tokens.slice(i + 1, tokens.length))[0]
-            params.push({ operation: { type: 'property' }, lhs: tokens.splice(i - 1, 1)[0], rhs: r })
-            i--
-        }
+        if (tokens[i].value == '(') depths['(']++
+        else if (tokens[i].value == ')') depths['(']--
+        else if (tokens[i].value == '[') depths['[']++
+        else if (tokens[i].value == ']') depths[']']--
+        else if (tokens[i].value == '{') depths['{']++
+        else if (tokens[i].value == '}') depths['}']--
 
         if (!tokens.length) break
 
-        if (tokens.length - 1 <= i) {
+        i++
+        if (tokens.length == i) {
             params.push(parse_operators(tokens.splice(0, tokens.length)))
         }
     }
-
     return params
 }
 
 const parse_array = (tokens) => {
-    let params = []
+    let params = {}
     let i = 0;
-    while (tokens.length) {
-        if (tokens[i].value == '[') {
-            let i2 = -1
-            for (let j = i + 1; j < tokens.length; j++) {
-                if (tokens[j].value == ']' && tokens[j].depth == tokens[i].depth) {
-                    i2 = j
-                    break
-                }
-            }
-            if (i2 == -1) {
-                throwError(new WaveGrassError('EOF Error', 'Unexpected End of File', params[0].line, params[0].col))
-            }
-
-            tokens.splice(i, 2, {
-                type: 'array',
-                values: parse_array(tokens.splice(i + 1, i2 - i - 1))
-            })
-
-            params.push(tokens.shift())
-            i = -1
-
-        } else if (tokens[i].value == ',') {
-            params.push(parse_operators(tokens.splice(0, i)))
-            tokens.shift()
-            i = -1
-        }
-
-        i++
-        if (tokens.length) {
-            if (tokens.length - 1 <= i) {
-                params.push(parse_operators(tokens.splice(0, tokens.length)))
-            }
-        }
-
+    let indexing = 0
+    let depths = {
+        '(': 0,
+        '[': 0,
+        '{': 0
     }
 
-    params = params.filter(i => !Array.isArray(i))
+    while (tokens.length) {
 
+        if (tokens[i].value == ',' && !Object.values(depths).reduce((a, b) => a + b, 0)) {
+            let value = parse_operators(tokens.splice(0, i))
+
+            params[indexing++] = value
+            tokens.shift()
+
+            i = 0
+        }
+
+        if (tokens[i].value == '(') depths['(']++
+        else if (tokens[i].value == ')') depths['(']--
+        else if (tokens[i].value == '[') depths['[']++
+        else if (tokens[i].value == ']') depths[']']--
+        else if (tokens[i].value == '{') depths['{']++
+        else if (tokens[i].value == '}') depths['}']--
+
+        if (!tokens.length) break
+
+        i++
+        if (tokens.length == i) {
+            params[indexing] = parse_operators(tokens.splice(0, tokens.length))
+        }
+    }
     return params
 }
 
@@ -264,17 +288,23 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
     if (!curr || (curr.type == endat.type && curr.value == endat.value)) return prev
     iterable.move()
 
-    if (['variable', 'number', 'string', 'boolean'].includes(curr.type)) {
+    if (['variable', 'number', 'string', 'boolean', 'null'].includes(curr.type)) {
         if (!prev) {
             return to_ast(iterable, { type: curr.type, value: curr.value, line: curr.line, col: curr.col }, endat, depth)
+        } else if (prev.changeable !== null) {
+            return to_ast(iterable, { type: curr.type, value: curr.value, line: curr.line, col: curr.col, changeable: prev.changeable }, endat, depth)
         }
     } else if (curr.type == 'assignment') {
-        if (!prev) throwError(new WaveGrassError('Syntax Error', 'Unexpected token \'=\'', curr.line, curr.col))
-
+        if (!prev) throwError(new WaveGrassError('Syntax Error', 'Unexpected token \'=\'', curr.col, curr.line))
         /*TODO
             Implement, multi variable assignemnet
         */
-        if (prev.type != 'variable') throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.col, prev.line))
+        if (prev.type != 'variable') {
+            prev.value ? throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.value.col, prev.value.line)) : throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.col, prev.line))
+        }
+
+        if(prev.changeable == null) prev.changeable = true
+
         if (curr.value == '=') {
             let next = parse_operators(accumulate_tokens(iterable, endat))
             return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: next }, endat, depth)
@@ -283,7 +313,8 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
             return to_ast(iterable, { type: 'assignment2', lhs: prev, rhs: next }, endat, depth)
         } else {
             let next = parse_operators(accumulate_tokens(iterable, endat))
-            return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { operation: { type: 'operator', value: curr.value[0] }, lhs: prev, rhs: next } }, endat, depth)
+            if(next.type != 'operation') next = { type: 'operation', value: [next] }
+            return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { type: 'operation', value: [ ...next.value, prev, { type: 'operator',  value: curr.value.substring(0, curr.value.length - 1), col: curr.col, line: curr.line } ] } }, endat, depth)
         }
     } else if (curr.type == 'bracket') {
         let args = accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: curr.depth })
@@ -298,6 +329,10 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
             return to_ast(iterable, { type: 'hoist', value: to_ast(iterable, null, endat, depth) }, endat, depth)
         } else if (curr.value == 'return') {
             return to_ast(iterable, { type: 'return', value: parse_operators(accumulate_tokens(iterable, endat)), line: curr.line, col: curr.col }, endat, depth)
+        } else if (curr.value == 'let') {
+            return to_ast(iterable, { changeable: true }, endat, depth)
+        } else if (curr.value == 'const') {
+            return to_ast(iterable, { changeable: false }, endat, depth)
         } else if (curr.value == 'if') {
             let condition = parse_operators(accumulate_tokens(iterable, { type: 'bracket', value: '{', depth: depth }))
 
@@ -398,36 +433,65 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
                 cond_data = cond_data.splice(1, cond_data.length - 2)
             }
 
-            cond_data = parse_params(cond_data)
+            let loopvar, cond, step;
+
+            if (cond_data.find(i => i.type == ',')) {
+                cond_data = parse_params(cond_data)
+
+                iterable.move()
+                [loopvar, cond, step] = [...cond_data]
+
+                if (!loopvar || loopvar.token == 'missing' || (loopvar.type == 'operation' && !loopvar.value.length)) {
+                    throwError(new WaveGrassError('Syntax Error', 'Missing variable for the loop', curr.col + 3, curr.line))
+                }
+
+                if (!cond || cond.token == 'missing' || (cond.type == 'operation' && !cond.value.length)) {
+                    throwError(new WaveGrassError('Syntax Error', 'Missing condition for the loop', curr.col + 3, curr.line))
+                }
+
+                if (!step || step.token == 'missing' || (step.type == 'operation' && !step.value.length)) {
+                    throwError(new WaveGrassError('Syntax Error', 'Missing change argument for the loop', curr.col + 3, curr.line))
+                }
+
+                if (loopvar.type == 'operation') {
+                    loopvar.value.splice(1, 1, loopvar.value[2], loopvar.value[1])
+
+                    let iter = iterator(loopvar.value)
+                    while (iter.next()) {
+                        loopvar = to_ast(iter, null, endat, depth + 1)
+                        iter.move()
+                    }
+                }
+
+            } else {
+                let index = cond_data.findIndex(i => i.value == 'in' || i.value == 'of')
+
+                if (index < 0) {
+                    throwError(new WaveGrassError('Syntax Error', 'Wrong arguments for the loop', curr.col + 3, curr.line))
+                }
+
+                loopvar = cond_data[0]
+                if (loopvar.type != 'variable') {
+                    throwError(new WaveGrassError('Syntax Error', 'Expected a variable', loopvar.col, loopvar.line))
+                }
+
+                if (index != 1) {
+                    throwError(new WaveGrassError('Syntax Error', 'Invalid token in the condition', cond_data[i].col, cond_data[i].line))
+                }
+
+                cond = {
+                    iterative: true,
+                    type: cond_data[1]
+                }
+
+                if (!cond_data[2]) {
+                    throwError(new WaveGrassError('Syntax Error', 'Missing iterable object', cond_data[1].col + 2, cond_data[2].line))
+                }
+
+                step = parse_operators(cond_data.splice(2, cond_data.length))
+            }
 
             iterable.move()
-            let [loopvar, cond, step] = [...cond_data]
-
-            /*TODO
-                Implement Second Type of For loop 
-            */
-
-            if (!loopvar || loopvar.token == 'missing' || (loopvar.type == 'operation' && !loopvar.value.length)) {
-                throwError(new WaveGrassError('Syntax Error', 'Missing variable for the loop', curr.col + 3, curr.line))
-            }
-
-            if (!cond || cond.token == 'missing' || (cond.type == 'operation' && !cond.value.length)) {
-                throwError(new WaveGrassError('Syntax Error', 'Missing condition for the loop', curr.col + 3, curr.line))
-            }
-
-            if (!step || step.token == 'missing' || (step.type == 'operation' && !step.value.length)) {
-                throwError(new WaveGrassError('Syntax Error', 'Missing change argument for the loop', curr.col + 3, curr.line))
-            }
-
-            if (loopvar.type == 'operation') {
-                loopvar.value.splice(1, 1, loopvar.value[2], loopvar.value[1])
-
-                let iter = iterator(loopvar.value)
-                while (iter.next()) {
-                    loopvar = to_ast(iter, null, endat, depth + 1)
-                    iter.move()
-                }
-            }
 
             let tokens = accumulate_tokens(iterable, { type: 'bracket', value: '}', depth: depth })
             iterable.move()
@@ -467,6 +531,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
                 if (arg_tokens.pop().depth != arg_tokens.shift().depth) {
                     throwError(new WaveGrassError('Syntax Error', `Unmatched Parathesis`, curr.col, curr.line))
                 }
+
                 args = parse_params(arg_tokens).map(i => {
                     if (i.type != 'variable') throwError(new WaveGrassError(('TypeError', `Expected a variable but got <class ${i.type}>`, i.col, i.line)))
                     return i.value
@@ -500,6 +565,13 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
                 return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { operation: { type: 'operator', value: '-' }, lhs: prev, rhs: { type: 'number', value: 1 } } }, endat, depth)
             }
         }
+    } else if (curr.type == 'symbol') {
+        if (!prev) throwError()
+        if (!(prev.type == 'string' || prev.type == 'variable' || prev.type == 'number')) throwError()
+
+        let next = parse_operators(accumulate_tokens(iterable, endat))
+
+        return to_ast(iterable, { type: 'propety', lhs: prev, rhs: next }, endat, depth)
     }
 }
 /**
@@ -515,7 +587,6 @@ const parse = (tokens) => {
         if (value) asts.push(value)
         iter.move()
     }
-
     execute(asts)
 }
 
