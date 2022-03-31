@@ -740,7 +740,7 @@ const run = async (ast, scope, depth_value = 0) => {
             throwError(new WaveGrassError(`Reference Error`, `'${ast.value.value}' is not a method`, ast.value.line, ast.value.col))
         }
 
-        WaveGrassError.trace.push(`at ${func.__name__().__value_of__()} (${WaveGrassError.file}:${ast.value.line}:${ast.value.col})`)
+        WaveGrassError.trace.push(`${func.__name__().__value_of__()} (${WaveGrassError.file}:${ast.value.line}:${ast.value.col})`)
         let args = await parse_params(ast.args, scope, depth_value)
 
         let ret = new WaveGrassNull()
@@ -767,7 +767,7 @@ const run = async (ast, scope, depth_value = 0) => {
                 else ret = new WaveGrassBoolean(false)
             } else {
                 if (func.__belongs_to__()) {
-                    ret = func.__belongs_to__()[func.__name__().__string__()]()
+                    ret = func.__belongs_to__()[func.__name__().__string__()](...args)
                     if (!(ret instanceof WaveGrassObject)) ret = createObject(typeof ret, ret)
                 }
             }
