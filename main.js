@@ -12,18 +12,24 @@ if (process.argv.length > 2) {
     file = 'main.wg'
 }
 
-let readAble;
-if (/\w:/.test(file)) {
-    if (fs.existsSync(`${file}`)) {
-        readAble = fs.readFileSync(`${file}`, 'utf-8')
-    }
-} else {
-    if (fs.existsSync(`./${file}`)) {
-        readAble = fs.readFileSync(`./${file}`, 'utf-8')
+const run = async () => {
+    let path = await new Promise((resolve) => {
+        fs.realpath(file, (error, path) => {
+            resolve(error ? undefined : path)
+        })
+    })
+
+    if(!path) {
+        console.log('File not found. Make sure the file exists')
+    } else {
+        if(fs.statSync(path).isDirectory()) {
+            path += '\\main.wg'
+
+        }
+
+        if(fs.existsSync(path)) await lex(fs.readFileSync(path, 'utf-8'), path)
+        else console.log('File not found. Make sure the file exists')
     }
 }
 
-if (readAble) lex(readAble, file)
-else {
-    console.log('\nFile not found. Make sure the file exists')
-}
+run()
