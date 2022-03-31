@@ -5,9 +5,15 @@ const lex = require('./lexer')
  * @type { string }
  */
 let file = ''
+const version = 'v0.1.0-beta'
 
 if (process.argv.length > 2) {
-    file = process.argv[2]
+    if(process.argv[2].startsWith('-')) {
+        let token = process.argv[2]
+        if(token[1] == 'v' || token.toLowerCase() == '--version') console.log(version)
+        if(token == '--node-version') console.log(process.version)
+    }
+    else file = process.argv[2]
 } else {
     file = 'main.wg'
 }
@@ -32,4 +38,4 @@ const run = async () => {
     }
 }
 
-run()
+if(file) run()
