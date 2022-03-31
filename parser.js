@@ -107,40 +107,61 @@ const to_post_fix_notation = (array) => {
         let token = array[i]
 
         if (non_operator_types.includes(token.type)) {
-            if (array[i + 1] && array[i + 1].type == 'bracket' && array[i + 1].value == '(') {
-                let foundIndex = -1
-                for (let j = i + 2; j < array.length; j++) {
-                    if (array[j].type == 'bracket' && array[j].value == ')' && array[j].depth == array[i + 1].depth) {
-                        foundIndex = j
-                        break
+            if (array[i + 1]) {
+                if (array[i + 1].type == 'bracket' && array[i + 1].value == '(') {
+                    let foundIndex = -1
+                    for (let j = i + 2; j < array.length; j++) {
+                        if (array[j].type == 'bracket' && array[j].value == ')' && array[j].depth == array[i + 1].depth) {
+                            foundIndex = j
+                            break
+                        }
                     }
-                }
 
-                if (foundIndex < 0) {
-                    throwError(new WaveGrassError('EOF Error', 'Unexpected end of input', array[i + 1].col, array[i - 1].line))
-                }
+                    if (foundIndex < 0) {
+                        throwError(new WaveGrassError('EOF Error', 'Unexpected end of input', array[i + 1].col, array[i - 1].line))
+                    }
 
-                array.splice(i + 1, 2, {
-                    type: 'call', args: parse_params(array.splice(i + 2, foundIndex - i - 2)), col: array[i].col, line: array[i].line
-                })
+                    array.splice(i + 1, 2, {
+                        type: 'call', args: parse_params(array.splice(i + 2, foundIndex - i - 2)), col: array[i].col, line: array[i].line
+                    })
+                } else if (array[i + 1].type == 'bracket' && array[i + 1].value == '[') {
+                    let foundIndex = -1
+                    for (let j = i + 2; j < array.length; j++) {
+                        if (array[j].type == 'bracket' && array[j].value == ']' && array[j].depth == array[i + 1].depth) {
+                            foundIndex = j
+                            break
+                        }
+                    }
+
+                    if (foundIndex < 0) {
+                        throwError(new WaveGrassError('EOF Error', 'Unexpected end of input', array[i].col, array[i].line))
+                    }
+
+                    let args = array.splice(i + 2, foundIndex - i - 2)
+                    if (args.length > 1) args = { type: 'array', values: parse_array(args) }
+
+                    array.splice(i + 1, 2, {
+                        type: 'property', property: args, col: array[i].col, line: array[i].line
+                    })
+                }
             }
             result.push(token)
         } else if (token.type == 'bracket') {
-            if(token.value == '(') stack.push(token)
+            if (token.value == '(') stack.push(token)
             else if (token.value == ')') {
                 while (stack[stack.length - 1].value != '(' && stack[stack.length - 1] != token.depth) {
                     result.push(stack.pop())
                 }
                 stack.pop()
-           
-            } else if(token.value == '[') {
+
+            } else if (token.value == '[') {
                 let foundIndex = -1
                 for (let j = i + 1; j < array.length; j++) {
                     if (array[j].type == 'bracket' && array[j].value == ']' && array[j].depth == array[i].depth) {
                         foundIndex = j
                         break
                     }
-                } 
+                }
 
                 if (foundIndex < 0) {
                     throwError(new WaveGrassError('EOF Error', 'Unexpected end of input', array[i].col, array[i].line))
@@ -188,7 +209,6 @@ const to_post_fix_notation = (array) => {
             }
         }
     }
-
     return result
 }
 const parse_operators = (array) => {
@@ -296,14 +316,12 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
         }
     } else if (curr.type == 'assignment') {
         if (!prev) throwError(new WaveGrassError('Syntax Error', 'Unexpected token \'=\'', curr.col, curr.line))
-        /*TODO
-            Implement, multi variable assignemnet
-        */
-        if (prev.type != 'variable') {
+
+        if (prev.type != 'variable' && prev.type != 'array' && prev.type != 'property') {
             prev.value ? throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.value.col, prev.value.line)) : throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.col, prev.line))
         }
 
-        if(prev.changeable == null) prev.changeable = true
+        if (prev.changeable == null) prev.changeable = true
 
         if (curr.value == '=') {
             let next = parse_operators(accumulate_tokens(iterable, endat))
@@ -313,15 +331,30 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
             return to_ast(iterable, { type: 'assignment2', lhs: prev, rhs: next }, endat, depth)
         } else {
             let next = parse_operators(accumulate_tokens(iterable, endat))
-            if(next.type != 'operation') next = { type: 'operation', value: [next] }
-            return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { type: 'operation', value: [ ...next.value, prev, { type: 'operator',  value: curr.value.substring(0, curr.value.length - 1), col: curr.col, line: curr.line } ] } }, endat, depth)
+            if (next.type != 'operation') next = { type: 'operation', value: [next] }
+            return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { type: 'operation', value: [...next.value, prev, { type: 'operator', value: curr.value.substring(0, curr.value.length - 1), col: curr.col, line: curr.line }] } }, endat, depth)
         }
     } else if (curr.type == 'bracket') {
-        let args = accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: curr.depth })
         if (curr.value == '(') {
+            let args = accumulate_tokens(iterable, { type: 'bracket', value: ')', depth: curr.depth })
             iterable.move()
+
             if (prev) {
-                return to_ast(iterable, { type: 'call', value: prev, args: parse_params(args, curr.depth) }, endat, depth)
+                return to_ast(iterable, { type: 'call', value: prev, args: parse_params(args, curr.depth), col: curr.col, line: curr.line + 1 }, endat, depth)
+            }
+        } else if (curr.value == '[') {
+            if (!prev || prev.changeable) {
+                let args = accumulate_tokens(iterable, { type: 'bracket', value: ']', depth: curr.depth })
+                iterable.move()
+
+                return to_ast(iterable, { type: 'array', values: parse_params(args), col: curr.col, line: curr.line }, endat, depth)
+            } else {
+                let args = accumulate_tokens(iterable, { type: 'bracket', value: ']', depth: curr.depth })
+                iterable.move()
+
+                if (args.length > 1) args = { type: 'array', values: parse_array(args) }
+                else args = args[0]
+                return to_ast(iterable, { type: 'property', lhs: prev, values: args, col: curr.col, line: curr.line }, endat, depth)
             }
         }
     } else if (curr.type == 'keyword') {
@@ -569,9 +602,25 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
         if (!prev) throwError()
         if (!(prev.type == 'string' || prev.type == 'variable' || prev.type == 'number')) throwError()
 
-        let next = parse_operators(accumulate_tokens(iterable, endat))
+        let next = []
 
-        return to_ast(iterable, { type: 'propety', lhs: prev, rhs: next }, endat, depth)
+        while(iterable.next()) {
+            let n = iterable.next()
+            if(n.value == '=') break
+            if(n.value == endat.value) break
+
+            next.push(n)
+            iterable.move()
+        }
+
+        if(!next.length) {
+
+        }
+
+        if(next.length == 1) next = next[0]
+        else next = parse_operators(next)
+
+        return to_ast(iterable, { type: 'property', lhs: prev, values: next, col: curr.col, line: curr.line }, endat, depth)
     }
 }
 /**
@@ -583,10 +632,11 @@ const parse = (tokens) => {
     let asts = []
 
     while (iter.next()) {
-        let value = to_ast(iter, null, { type: 'delim', value: ';' }, 0, tokens.filedata)
+        let value = to_ast(iter, null, { type: 'delim', value: ';' }, 0)
         if (value) asts.push(value)
         iter.move()
     }
+
     execute(asts)
 }
 

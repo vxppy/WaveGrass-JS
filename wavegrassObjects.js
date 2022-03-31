@@ -9,6 +9,8 @@ class WaveGrassObject {
         this.__properties = {}
     }
 
+    __mutable__ = () => this.__mutable
+
     __string__ = (colored) => {
         return colored ? '\x1b[36m[Object Object]\x1b[0m' : '[Object object]'
     }
@@ -113,7 +115,7 @@ class WaveGrassObject {
 
     __strict_equals__ = rval => {
         if (this.__type__() == rval.__type__() && rval.__value_of__() == this.__value_of__()) {
-            if(this.__mutable) {
+            if (this.__mutable) {
                 if (this == rval) return new WaveGrassBoolean(true)
             } else return new WaveGrassBoolean(true)
         } else return new WaveGrassBoolean(false)
@@ -446,7 +448,7 @@ class WaveGrassArray extends WaveGrassObject {
     }
 
     __bool__ = () => {
-        if(this.length.__value_of__() == 0) return new WaveGrassBoolean(false)
+        if (this.length.__value_of__() == 0) return new WaveGrassBoolean(false)
         return new WaveGrassBoolean(true)
     }
 
@@ -454,17 +456,19 @@ class WaveGrassArray extends WaveGrassObject {
         let str = []
         let len = this.length.__value_of__()
         for (let i = 0; i < len; i++) {
-            if (this.__value[i].__type__() == 'string') {
-                str.push(`\x1b[32m'${this.__value[i].__string__(colored).replace(/'/, '\\\'')}'\x1b[0m`)
+            let v = this.__value[i]
+            if (!v) v = new WaveGrassNull()
+            if (v.__type__() == 'string') {
+                str.push(`\x1b[32m'${v.__string__(colored).replace(/'/, '\\\'')}'\x1b[0m`)
             } else {
-                if (this.__value[i].__type__() == 'array') {
+                if (v.__type__() == 'array') {
                     if (globalDepth == depth) {
                         str.push('[Array]')
                     } else {
-                        str.push(this.__value[i].__string__(colored, depth + 1))
+                        str.push(v.__string__(colored, depth + 1))
                     }
                 } else {
-                    str.push(this.__value[i].__string__(colored))
+                    str.push(v.__string__(colored))
                 }
             }
         }
@@ -526,6 +530,38 @@ class WaveGrassArray extends WaveGrassObject {
         }
     }
 
+    __set_property__ = (name, value) => {
+        if (isNaN(parseInt(name))) {
+            this.__properties[name] = value
+        } else {
+            for (let i in this.__value) {
+                if (i > name) {
+                    this.__value[name] = value
+                    return
+                }
+            }
+
+            this.length.__value = name + 1
+            this.__value[`${name}`] = value
+        }
+    }
+
+    __get_property__ = (name) => {
+        if (isNaN(parseInt(name))) {
+            if (['constructor', 'prototype'].includes(name)) return new WaveGrassNull()
+
+            if (this.__properties[name]) return this.__properties[name]
+
+            if (this[name]) {
+                return this[name]
+            }
+    
+            return new WaveGrassNull()
+        } else {
+            return this.__value[name]
+        }
+    }
+
     __iterator__ = () => {
         let index = 0
         let len = this.length.__value_of__()
@@ -534,6 +570,18 @@ class WaveGrassArray extends WaveGrassObject {
                 return { value: this.__value[index] ?? new WaveGrassNull(), index: new WaveGrassNumber(index++), finished: new WaveGrassBoolean(index > len) }
             }
         }
+    }
+
+    pop = () => {
+        if(this.length.__value_of__() > 0) {
+            this.length.__value--
+
+            let value = this.__value[this.length.__value_of__()]
+            delete this.__value[this.length.__value_of__()]
+
+            return value
+        }
+        return new WaveGrassNull()
     }
 }
 
@@ -549,7 +597,7 @@ class WaveGrassFunction extends WaveGrassObject {
         this.__belongs_to = belongs_to
     }
 
-    __string__ = (colored) =>  colored ? `\x1b[36m[Function ${this.__name__().__value_of__()}]\x1b[0m` : `[Function ${this.__name__().__value_of__()}]`
+    __string__ = (colored) => colored ? `\x1b[36m[Function ${this.__name__().__value_of__()}]\x1b[0m` : `[Function ${this.__name__().__value_of__()}]`
 
     __name__ = () => new WaveGrassString(this.__name)
 
@@ -571,7 +619,7 @@ class WaveGrassBoolean extends WaveGrassObject {
         this.__mutable = false
     }
 
-    __string__ = (colored) => colored ? `\x1b[34m${this.__value_of__().toString()}\x1b[0m`: this.__value_of__().toString()
+    __string__ = (colored) => colored ? `\x1b[34m${this.__value_of__().toString()}\x1b[0m` : this.__value_of__().toString()
 
     __bool__ = () => {
         return this
@@ -632,7 +680,7 @@ class WaveGrassNull extends WaveGrassObject {
         new WaveGrassError('TypeError', `Cannot add <class ${rval.__type__()}> and <class ${this.__type__()}>`)
     }
 
-    __string__ = (colored) => colored ? `\x1b[34mnull\x1b[0m`: 'null'
+    __string__ = (colored) => colored ? `\x1b[34mnull\x1b[0m` : 'null'
 
     __get_property__ = () => new WaveGrassError('TypeError', 'Cannot get property of null')
 
