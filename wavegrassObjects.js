@@ -150,55 +150,55 @@ class WaveGrassObject {
     }
 
     __b_and__ = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+        return new WaveGrassError('TypeError', `Can't perform binary and between two items of type <class ${this.__type__()}> and <class ${rval.__type__()}>`)
     }
 
     __r_b_and__ = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+        return this.__b_and__(rval)
     }
 
     __b_or__ = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+        return new WaveGrassError('TypeError', `Can't perform binary or between two items of type <class ${this.__type__()}> and <class ${rval.__type__()}>`)
     }
 
     __r_b_or__ = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+        return this.__b_or__(rval)
     }
 
     __b_xor__ = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+        return new WaveGrassError('TypeError', `Can't perform binary xor between two items of type <class ${this.__type__()}> and <class ${rval.__type__()}>`)
     }
 
     __r_b_xor__ = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+        return this.__b_xor__(rval)
     }
 
-    __b_not__ = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+    __b_not__ = () => {
+        return new WaveGrassError('TypeError', `Can't perform binary not on item of <class${this.__type__()}>`)
     }
 
     __b_l_shift__ = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+        return new WaveGrassError('TypeError', `Can't perform binary left shift between two items of type <class ${this.__type__()}> and <class ${rval.__type__()}>`)
     }
 
     __r_b_l_shift__ = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+        return this.__b_l_shift__(rval)
     }
 
     __b_r_s_shift__ = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+        return new WaveGrassError('TypeError', `Can't perform binary right signed shift between two items of type <class ${this.__type__()}> and <class ${rval.__type__()}>`)
     }
 
     __r_b_r_s_shift__ = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+        return this.__b_r_s_shift__(rval)
     }
 
     __b_r_us_shift = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+        return new WaveGrassError('TypeError', `Can't perform binary right unsigned shift between two items of type <class ${this.__type__()}> and <class ${rval.__type__()}>`)
     }
 
     __r_b_r_us_shift__ = rval => {
-        return new WaveGrassError('Unimplemented', `This operator is not implemented`)
+        return this.__b_r_us_shift(rval)
     }
 
     /**
@@ -212,11 +212,10 @@ class WaveGrassObject {
     __get_property__ = name => {
         if (['constructor', 'prototype'].includes(name)) return new WaveGrassNull()
 
-        if (this[name]) {
-            return this[name]
-        }
-
         if (this.__properties[name]) return this.__properties[name]
+
+        if (this[name]) return this[name]
+
         return new WaveGrassNull()
     }
 
@@ -375,6 +374,47 @@ class WaveGrassNumber extends WaveGrassObject {
         else return new WaveGrassNumber('NaN')
     }
 
+    __b_not__ = () => {
+        if (this.__value_of__() == 'NaN') return new WaveGrassNumber('NaN')
+        else return new WaveGrassNumber(~this.__value_of__())
+    }
+
+    __b_and__ = rval => {
+        rval = WaveGrassNumber.parseInt(rval, 10)
+        if (rval.__value_of__() != 'NaN' && this.__value_of__() != 'NaN') return new WaveGrassNumber(this.__value_of__() & rval.__value_of__())
+        else return new WaveGrassNumber('NaN')
+    }
+
+    __b_or__ = rval => {
+        rval = WaveGrassNumber.parseInt(rval, 10)
+        if (rval.__value_of__() != 'NaN' && this.__value_of__() != 'NaN') return new WaveGrassNumber(this.__value_of__() | rval.__value_of__())
+        else return new WaveGrassNumber('NaN')
+    }
+
+    __b_xor__ = rval => {
+        rval = WaveGrassNumber.parseInt(rval, 10)
+        if (rval.__value_of__() != 'NaN' && this.__value_of__() != 'NaN') return new WaveGrassNumber(this.__value_of__() ^ rval.__value_of__())
+        else return new WaveGrassNumber('NaN')
+    }
+
+    __b_l_shift__ = rval => {
+        rval = WaveGrassNumber.parseInt(rval, 10)
+        if (rval.__value_of__() != 'NaN' && this.__value_of__() != 'NaN') return new WaveGrassNumber(this.__value_of__() << rval.__value_of__())
+        else return new WaveGrassNumber('NaN')
+    }
+
+    __b_r_s_shift__ = rval => {
+        rval = WaveGrassNumber.parseInt(rval, 10)
+        if (rval.__value_of__() != 'NaN' && this.__value_of__() != 'NaN') return new WaveGrassNumber(this.__value_of__() >> rval.__value_of__())
+        else return new WaveGrassNumber('NaN')
+    }
+
+    __b_r_us_shift = rval => {
+        rval = WaveGrassNumber.parseInt(rval, 10)
+        if (rval.__value_of__() != 'NaN' && this.__value_of__() != 'NaN') return new WaveGrassNumber(this.__value_of__() >>> rval.__value_of__())
+        else return new WaveGrassNumber('NaN')
+    }
+
     static parseInt = (n, radix = 10) => {
         if (!n.__type__()) return new WaveGrassNumber(0)
 
@@ -459,7 +499,7 @@ class WaveGrassArray extends WaveGrassObject {
             let v = this.__value[i]
             if (!v) v = new WaveGrassNull()
             if (v.__type__() == 'string') {
-                str.push(`\x1b[32m'${v.__string__(colored).replace(/'/, '\\\'')}'\x1b[0m`)
+                str.push(colored ? `\x1b[32m'${v.__string__().replace(/'/, '\\\'')}'\x1b[0m` : `'${v.__string__().replace(/'/, '\\\'')}'`)
             } else {
                 if (v.__type__() == 'array') {
                     if (globalDepth == depth) {
@@ -555,7 +595,7 @@ class WaveGrassArray extends WaveGrassObject {
             if (this[name]) {
                 return this[name]
             }
-    
+
             return new WaveGrassNull()
         } else {
             return this.__value[name]
@@ -573,7 +613,7 @@ class WaveGrassArray extends WaveGrassObject {
     }
 
     pop = () => {
-        if(this.length.__value_of__() > 0) {
+        if (this.length.__value_of__() > 0) {
             this.length.__value--
 
             let value = this.__value[this.length.__value_of__()]
@@ -582,6 +622,14 @@ class WaveGrassArray extends WaveGrassObject {
             return value
         }
         return new WaveGrassNull()
+    }
+
+    push = (...items) => {
+        for(let i = 0; i < items.length; i++) {
+            this.__value[this.length.__value_of__()] = items[i]
+            this.length.__value++
+        }   
+        return this.length
     }
 }
 
@@ -610,6 +658,16 @@ class WaveGrassFunction extends WaveGrassObject {
     __internal__ = () => this.__is_internal
 
     __belongs_to__ = () => this.__belongs_to
+
+    __get_property__ = name => {
+        if (['constructor', 'prototype', '__get_args__', '__get_statements__', '__internal__', '__belongs_to__'].includes(name)) return new WaveGrassNull()
+
+        if (this.__properties[name]) return this.__properties[name]
+
+        if (this[name]) return this[name]
+
+        return new WaveGrassNull()
+    }
 }
 
 class WaveGrassBoolean extends WaveGrassObject {
