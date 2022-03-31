@@ -25,7 +25,7 @@ scopes['global'].map.set('parseNum', { value: parseNum, changeable: true })
 scopes['global'].map.set('isNaN', { value: _isNaN, changeable: true })
 
 
-const unary = ['!', '~', '!!', '~~', '_-', '_+', '++', '_++', '--', '_--']
+const unary = ['!', '~', '!!', '~~', '_-', '_+', '++', '_++', '--', '_--', 'property']
 
 const toString = async (tokens, sep, colored) => {
     let str = []
@@ -153,9 +153,13 @@ const operate_by_operation = (opp, lhs, rhs) => {
         if (WaveGrassError.isError(value)) value = lhs.__r_mod__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__mod__(lhs)
     } else if (opp.value == '!') {
-        value = lhs.__not__()
+        if (lhs.type == 'nf') {
+            value = new WaveGrassBoolean(false)
+        } else value = lhs.__not__()
     } else if (opp.value == '!!') {
-        value = lhs.__bool__()
+        if (lhs.type == 'nf') {
+            value = new WaveGrassBoolean(true)
+        } else value = lhs.__bool__()
     } else if (opp.value == '~') {
         value = lhs.__b_not__()
     } else if (opp.value == '~~') {
@@ -252,6 +256,20 @@ const operate = async (ast, scope, depth = 0) => {
             ast = getValueOfVariable(ast, scope)
             if (ast.type == 'nf') return ast
             ast[i] = ast[i].value
+        } else if (ast.type == 'array') {
+            let len = 0
+            for (let j in ast.values) {
+                if (ast.values[j].type == 'variable') {
+                    ast.values[j] = getValueOfVariable(ast.values[j], scope)
+                    let v = getValueOfVariable(ast.values[j], scope)
+                    if (v == 'nf') throwError(new WaveGrassError('ReferenceError', `'${ast.values[j].value}' is not defined`, ast.values[j].col, ast.values[j].line))
+                    ast.values[j] = v.value
+                } else if (ast.values[j].type == 'operation') {
+                    ast.values[j] = await operate(ast.values[j].value, scope, depth)
+                } else ast.values[j] = createObject(ast.values[j].type, ast.values[j].value)
+                len++
+            }
+            return new WaveGrassArray(ast.values, len)
         }
 
         if (!(ast instanceof WaveGrassObject)) ast = createObject(ast.type, ast.value)
@@ -262,7 +280,9 @@ const operate = async (ast, scope, depth = 0) => {
     let values = []
 
     for (let i = 0; i < ast.length; i++) {
-        if (ast[i].type == 'operator') {
+        if (ast[i].type == 'property') {
+            values.push(get_property(values.pop(), ast[i].property, scope))
+        } else if (ast[i].type == 'operator') {
             if (unary.includes(ast[i].value)) {
                 values.push(operate_by_operation(ast[i], values.pop()))
             } else {
@@ -313,18 +333,18 @@ const operate = async (ast, scope, depth = 0) => {
                 } else {
                     if (ast[i + 2]) {
                         if (ast[i + 2].value != ':') {
-                            ast[i] = getValueOfVariable(ast[i], scope)
-                            if (ast[i].type == 'nf') {
-                                throwError()
-                            }
-                            ast[i] = ast[i].value
+                            let v = getValueOfVariable(ast[i], scope)
+                            if (v.type == 'nf') {
+                                if (!ast[i + 1] || !['!', '!!'].includes(ast[i + 1].value)) throwError(new WaveGrassError('ReferenceError', `'${ast[i].value}' is not defined`, ast[i].col, ast[i].line))
+                                ast[i] = v
+                            } else ast[i] = v.value
                         }
                     } else {
-                        ast[i] = getValueOfVariable(ast[i], scope)
-                        if (ast[i].type == 'nf') {
-                            throwError()
-                        }
-                        ast[i] = ast[i].value
+                        let v = getValueOfVariable(ast[i], scope)
+                        if (v.type == 'nf') {
+                            if (!ast[i + 1] || !['!', '!!'].includes(ast[i + 1].value)) throwError(new WaveGrassError('ReferenceError', `'${ast[i].value}' is not defined`, ast[i].col, ast[i].line))
+                            ast[i] = v
+                        } else ast[i] = v.value
                     }
                 }
             } else {
@@ -332,11 +352,9 @@ const operate = async (ast, scope, depth = 0) => {
                     let len = 0
                     for (let j in ast[i].values) {
                         if (ast[i].values[j].type == 'variable') {
-                            ast[i].values[j] = getValueOfVariable(ast[i].values[j], scope)
-                            if (ast[i].type == 'nf') {
-                                throwError()
-                            }
-                            ast[i].values[j] = ast[i].values[j].value
+                            let v = getValueOfVariable(ast[i].values[j], scope)
+                            if (v == 'nf') throwError(new WaveGrassError('ReferenceError', `'${ast[i].values[j].value}' is not defined`, ast[i].values[j].col, ast[i].values[j].line))
+                            ast[i].values[j] = v.value
                         } else if (ast[i].values[j].type == 'operation') {
                             ast[i].values[j] = await operate(ast[i].values[j].value, scope, depth)
                         } else ast[i].values[j] = createObject(ast[i].values[j].type, ast[i].values[j].value)
@@ -405,6 +423,91 @@ const find_scope_that_matches = (start, ...values) => {
     return
 }
 
+const assign_property = async (variable, property, value, scope) => {
+
+    let val;
+    if (variable.type == 'property') {
+        val = await get_property(variable.lhs, variable.values, scope)
+    } else if (!variable.__type__) {
+        if (variable.type == 'variable') {
+            val = getValueOfVariable(variable, scope)
+        } else {
+            val = createObject(variable.type, variable.value)
+        }
+
+        if (val.type == 'nf') {
+            throwError(new WaveGrassError('Reference Error', `'${variable.value}' is not defined`, variable.col, variable.line))
+        }
+        val = val.value
+    } else {
+        val = variable
+    }
+
+    if (!val.__mutable__()) {
+        throwError(new WaveGrassError('TypeError', 'Cannot change value of an immutable', property.col, property.line))
+    }
+
+    value = await operate(value.type == 'operation' ? value.value : value)
+    property = property.type == 'operation' ? await operate( property.value) : property
+
+    if (!property) throwError(new WaveGrassError('SyntaxError', 'No property or index was given', 0, 0))
+
+    if(property.type) {
+        return val.__set_property__(property.value, value)
+    } else {
+        if (property.__type__() == 'array') {
+            let iterator = value.__iterator__()
+            if (iterator.next) {
+                for (let i in property.__value) {
+                    val.__set_property__(property.__value[i].__value_of__(), iterator.next().value)
+                }
+            } else {
+                val.__set_property__(property.__value['0'].__value_of__(), value)
+                for (let i in property.__value) {
+                    if (i != '0') {
+                        val.__set_property__(property.__value[i].__value_of__(), new WaveGrassNull())
+                    }
+                }
+            }
+        } else {
+            val.__set_property__(property.__value_of__(), value)
+        }
+    }
+}
+
+const get_property = async (variable, property, scope) => {
+    let val;
+    if (!variable.__type__) {
+        if (variable.type == 'variable') {
+            val = getValueOfVariable(variable, scope)
+
+        } else {
+            val = createObject(variable.type, variable.value)
+        }
+        if (val.type == 'nf') {
+            throwError(new WaveGrassError('Reference Error', `'${variable.value}' is not defined`, variable.col, variable.line))
+        }
+        val = val.value
+    } else {
+        val = variable
+    }
+
+    property = property.type == 'operation' ? await operate(property.value) : property
+
+    if (!property) throwError(new WaveGrassError('SyntaxError', 'No property or index was given', 0, 0))
+    if (property.__type__() == 'array') {
+        let value = new WaveGrassArray({}, 0)
+        let iter = property.__iterator__()
+
+        for (let i in property.__value) {
+            value.__set_property__(iter.next().index.__value_of__(), val.__get_property__(property.__value[i].__value_of__()) ?? new WaveGrassNull())
+        }
+        return value
+    } else {
+        return val.__get_property__(property.__value_of__()) ?? new WaveGrassNull()
+    }
+}
+
 const parse_params = async (tokens, scope, depth = 0) => {
     let args = []
     for (const i of tokens) {
@@ -463,87 +566,139 @@ const run = async (ast, scope, depth_value = 0) => {
     if (ast.type != 'call') ast = structuredClone(ast)
 
     if (ast.type == 'assignment') {
-        let scp = find_variable_scope(ast.lhs, scope)
-
-        if (scopes[scp ?? scope].map.has(ast.lhs.value)) {
-            if (!scopes[scp ?? scope].map.get(ast.lhs.value).changeable) {
-                throwError(new WaveGrassError('TypeError', `Assignment to a constant variable '${ast.lhs.value}'`, ast.lhs.col, ast.lhs.line))
+        if (ast.lhs.type == 'array') {
+            if (!ast.lhs.values[0]) {
+                throwError(new WaveGrassError('Syntax Error', 'Found array assignment of 0 length', ast.lhs.col, ast.lhs.line))
             }
-        }
 
-        if (ast.rhs.type == 'operation') {
             let value = {
                 changeable: ast.lhs.changeable,
-                value: await operate(ast.rhs.value, scope, depth_value)
+                value: await operate(ast.rhs.type == 'operation' ? ast.rhs.value : ast.rhs, scope, depth_value)
             }
-            if (!scp) scopes[scope].map.set(ast.lhs.value, value)
-            else scopes[scp].map.set(ast.lhs.value, value)
-        } else {
-            if (ast.rhs.type == 'variable') {
-                let value = getValueOfVariable(ast.rhs, scope)
-                if (value.type == 'nf') {
-                    throwError(new WaveGrassError(`Reference Error`, `'${ast.lhs.value}' is not defined`, ast.lhs.line, ast.lhs.col))
-                }
-                value = value.value
-                if (value.__type__() == 'method') {
-                    let obj = {
-                        changeable: ast.lhs.changeable,
-                        value: createObject(value.__type__(), ast.lhs.value, value.__get_args__(), value.__get_statements__(), value.__internal__())
-                    }
-                    if (!scp) scopes[scope].map.set(ast.lhs.value, obj)
-                    else scopes[scp].map.set(ast.lhs.value, obj)
-                } else if (value.__type__() == 'array') {
-                    let obj = {
-                        changeable: ast.lhs.changeable,
-                        value: new WaveGrassArray(value.__value, value.length.__value_of__())
-                    }
-                    if (!scp) scopes[scope].map.set(ast.lhs.value, obj)
-                    else scopes[scp].map.set(ast.lhs.value, obj)
-                } else {
-                    let obj = {
-                        changeable: ast.lhs.changeable,
-                        value: createObject(value.__type__(), value.__value_of__())
-                    }
-                    if (!scp) scopes[scope].map.set(ast.lhs.value, obj)
-                    else scopes[scp].map.set(ast.lhs.value, obj)
-                }
-            } else if (ast.rhs.type == 'call') {
-                let val = await run(ast.rhs, scope, depth_value)
-                val = createObject(val.type, val.value)
-                if (!scp) scopes[scope].map.set(ast.lhs.value, val)
-                else scopes[scp].map.set(ast.lhs.value, val)
-            } else {
-                if (ast.rhs.type == 'method') {
-                    let obj = {
-                        changeable: ast.lhs.changeable,
-                        value: createObject(ast.rhs.type, ast.lhs.value, ast.rhs.args, ast.rhs.statements)
-                    }
-                    if (!scp) scopes[scope].map.set(ast.lhs.value, obj)
-                    else scopes[scp].map.set(ast.lhs.value, obj)
-                } else {
-                    let obj = {
-                        changeable: ast.lhs.changeable,
-                        value: createObject(ast.rhs.type, ast.rhs.value)
-                    }
-                    if (!scp) scopes[scope].map.set(ast.lhs.value, obj)
-                    else scopes[scp].map.set(ast.lhs.value, obj)
-                }
-            }
-        }
-        return ast.lhs
-    } else if (ast.type == 'assignment2') {
-        let scp = find_variable_scope(ast.lhs, scope)
 
-        if (scopes[scp ?? scope].map.has(ast.lhs.value)) {
-            if (!scopes[scp ?? scope].map.get(ast.lhs.value).changeable) {
+            let iterator = value.value.__iterator__()
+            if (iterator.next) {
+                for (let i in ast.lhs.values) {
+                    let place = scopes[find_variable_scope(ast.lhs.values[i], scope) ?? scope].map
+
+                    if (place.has(ast.lhs.values[i].value)) {
+                        if (!place.get(ast.lhs.values[i].value).changeable) {
+                            throwError(new WaveGrassError('TypeError', `Assignment to a constant variable '${ast.lhs.values[i]}'`, ast.lhs.col, ast.lhs.line))
+                        }
+                    }
+
+                    place.set(ast.lhs.values[i].value, {
+                        value: iterator.next().value,
+                        changeable: ast.lhs.changeable
+                    })
+                }
+            } else {
+                let place = scopes[find_variable_scope(ast.lhs.values['0'], scope) ?? scope].map
+
+                if (place.has(ast.lhs.values['0'].value)) {
+                    if (!place.get(ast.lhs.value['0'].value).changeable) {
+                        throwError(new WaveGrassError('TypeError', `Assignment to a constant variable '${ast.lhs.values[i]}'`, ast.lhs.col, ast.lhs.line))
+                    }
+                }
+
+                place.set(ast.lhs.values['0'].value, {
+                    value: value.value,
+                    changeable: ast.lhs.changeable
+                })
+
+                for (let i in ast.lhs.values) {
+                    if (i != '0') {
+                        place = scopes[find_variable_scope(ast.lhs.values[i], scope) ?? scope].map
+
+                        if (place.has(ast.lhs.values[i].value)) {
+                            if (!place.get(ast.lhs.value).changeable) {
+                                throwError(new WaveGrassError('TypeError', `Assignment to a constant variable '${ast.lhs.values[i]}'`, ast.lhs.col, ast.lhs.line))
+                            }
+                        }
+
+                        place.set(ast.lhs.values[i].value, {
+                            value: new WaveGrassNull(),
+                            changeable: ast.lhs.changeable
+                        })
+                    }
+                }
+            }
+        } else if (ast.lhs.type == 'property') {
+            await assign_property(ast.lhs.lhs, ast.lhs.values, ast.rhs, scope)
+        } else {
+            let place = scopes[find_variable_scope(ast.lhs, scope) ?? scope].map
+
+            if (place.has(ast.lhs.value)) {
+                if (!place.get(ast.lhs.value).changeable) {
+                    throwError(new WaveGrassError('TypeError', `Assignment to a constant variable '${ast.lhs.value}'`, ast.lhs.col, ast.lhs.line))
+                }
+            }
+
+            if (ast.rhs.type == 'operation') {
+                let value = {
+                    changeable: ast.lhs.changeable,
+                    value: await operate(ast.rhs.value, scope, depth_value)
+                }
+                place.set(ast.lhs.value, value)
+            } else {
+                if (ast.rhs.type == 'variable') {
+                    let value = getValueOfVariable(ast.rhs, scope)
+                    if (value.type == 'nf') {
+                        throwError(new WaveGrassError(`Reference Error`, `'${ast.lhs.value}' is not defined`, ast.lhs.line, ast.lhs.col))
+                    }
+                    value = value.value
+                    if (value.__type__() == 'method') {
+                        let obj = {
+                            changeable: ast.lhs.changeable,
+                            value: createObject(value.__type__(), ast.lhs.value, value.__get_args__(), value.__get_statements__(), value.__internal__())
+                        }
+                        place.set(ast.lhs.value, obj)
+                    } else if (value.__type__() == 'array') {
+                        let obj = {
+                            changeable: ast.lhs.changeable,
+                            value: new WaveGrassArray(value.__value, value.length.__value_of__())
+                        }
+                        place.set(ast.lhs.value, obj)
+                    } else {
+                        let obj = {
+                            changeable: ast.lhs.changeable,
+                            value: createObject(value.__type__(), value.__value_of__())
+                        }
+                        place.set(ast.lhs.value, obj)
+                    }
+                } else if (ast.rhs.type == 'call') {
+                    let val = await run(ast.rhs, scope, depth_value)
+                    val = createObject(val.type, val.value)
+                    place.set(ast.lhs.value, val)
+                } else {
+                    if (ast.rhs.type == 'method') {
+                        let obj = {
+                            changeable: ast.lhs.changeable,
+                            value: createObject(ast.rhs.type, ast.lhs.value, ast.rhs.args, ast.rhs.statements)
+                        }
+                        place.set(ast.lhs.value, obj)
+                    } else {
+                        let obj = {
+                            changeable: ast.lhs.changeable,
+                            value: createObject(ast.rhs.type, ast.rhs.value)
+                        }
+                        place.set(ast.lhs.value, obj)
+                    }
+                }
+            }
+            return ast.lhs
+        }
+    } else if (ast.type == 'assignment2') {
+        let place = scopes[find_variable_scope(ast.lhs, scope) ?? scope].map
+
+        if (place.has(ast.lhs.value)) {
+            if (!place.get(ast.lhs.value).changeable) {
                 throwError(new WaveGrassError('TypeError', `Assignment to a constant variable '${ast.lhs.value}'`, ast.lhs.col, ast.lhs.line))
             }
         }
-
         if (ast.rhs.type == 'operation') {
             let value = await operate(ast.rhs.value, scope, depth_value)
-            if (!scp) scopes[scope].map.set(ast.lhs.value, value)
-            else scopes[scp].map.set(ast.lhs.value, value)
+            place.set(ast.lhs.value, value)
         } else {
             if (ast.rhs.type == 'variable') {
                 let value = getValueOfVariable(ast.rhs, scope)
@@ -556,8 +711,7 @@ const run = async (ast, scope, depth_value = 0) => {
                 let val = await run(ast.rhs, scope, depth_value)
                 val = createObject(val.type, val.value)
 
-                if (!scp) scopes[scope].map.set(ast.lhs.value, val)
-                else scopes[scp].map.set(ast.lhs.value, val)
+                place.set(ast.lhs.value, val)
             } else {
                 if (!scp) scopes[scope].map.set(ast.lhs.value, createObject(ast.rhs.type, ast.rhs.value))
                 else scopes[scp].map.set(ast.lhs.value, createObject(ast.rhs.type, ast.rhs.value))
@@ -574,13 +728,14 @@ const run = async (ast, scope, depth_value = 0) => {
             }
         } else {
             func = getValueOfVariable(ast.value, scope)
+            
+            if (func.type == 'nf') {
+                throwError(new WaveGrassError(`Reference Error`, `'${ast.value.value}' is not defined`, ast.value.line, ast.value.col))
+            }
+
+            func = func.value
         }
 
-        if (func.type == 'nf') {
-            throwError(new WaveGrassError(`Reference Error`, `'${ast.value.value}' is not defined`, ast.value.line, ast.value.col))
-        }
-
-        func = func.value
         if (func.__type != 'method') {
             throwError(new WaveGrassError(`Reference Error`, `'${ast.value.value}' is not a method`, ast.value.line, ast.value.col))
         }
@@ -840,6 +995,11 @@ const run = async (ast, scope, depth_value = 0) => {
             throwError(new WaveGrassError('Syntax Error', 'Unexpcted token \'continue\'', ast.line, ast.col))
         }
         return { type: 'continue' }
+    } else if(ast.type == 'property') {
+        let operation = [ast.lhs, ...(ast.values.type == 'operation' ? ast.values.value : [ast.values] ) ]
+        operation.splice(2, 0, { type: 'symbol', value: '.'})
+        
+        await operate(operation, scope, depth_value)
     }
 }
 
