@@ -627,7 +627,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
  * 
  * @param { Token[] } tokens 
  */
-const parse = (tokens) => {
+const parse = async (tokens) => {
     let iter = iterator(tokens)
     let asts = []
 
@@ -637,7 +637,7 @@ const parse = (tokens) => {
         iter.move()
     }
 
-    execute(asts)
+    await execute(asts)
 }
 
 module.exports = parse

@@ -136,9 +136,9 @@ const parseName = (iterable, current, line, col) => {
 
 /**
  * @param { string } fileContent The content of the file being lexed
- * @returns { boolean }
+ * @returns { Promise<boolean> }
  */
-const lex = (fileContent, file) => {
+const lex = async (fileContent, file) => {
     fileContent = fileContent.replace(/\r/g, '')
 
     let line = 1, col = 0
@@ -386,7 +386,7 @@ const lex = (fileContent, file) => {
         }
     }
 
-    parse(tokens)
+    await parse(tokens)
     return true
 }
 
