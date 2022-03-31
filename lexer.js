@@ -4,7 +4,7 @@ const throwError = require("./throwError")
 const { WaveGrassError } = require("./wavegrassObjects")
 
 const keyword = [
-    "if", "else", "define", "catch", "try", "break", "return", "continue", "let", "const", "hoist", 'while', 'for', 'in'
+    "if", "else", "define", "catch", "try", "break", "return", "continue", "let", "const", "hoist", 'while', 'for', 'in', 'of'
 ]
 const brackets_map = {
     '()': 0,
@@ -55,7 +55,6 @@ const parseDelim = (iterable, delim, type = 'string', line, col) => {
     if (!iterable.next()) {
         throwError(new WaveGrassError('EOF Error', 'Unexpected end of file', line, col))
     }
-    // console.log(iterable.next())
 
     iterable.move()
     ret = ret.join('')
@@ -91,7 +90,6 @@ const parseNum = (iterable, current, dot = false, line, col) => {
         }
 
         ret.push(curr)
-        iterable.move()
     }
 
     ret = ret.join('')
@@ -129,6 +127,8 @@ const parseName = (iterable, current, line, col) => {
         type = 'boolean'
     } else if (keyword.includes(ret)) {
         type = 'keyword'
+    } else if (ret == 'null') {
+        type = 'null'
     } else type = 'variable'
 
     return { data: { type: type, value: ret, line: line, col: col }, change: change }
@@ -136,15 +136,15 @@ const parseName = (iterable, current, line, col) => {
 
 /**
  * @param { string } fileContent The content of the file being lexed
- * @returns { boolean }
+ * @returns { Promise<boolean> }
  */
-const lex = (fileContent, file) => {
+const lex = async (fileContent, file) => {
+    fileContent = fileContent.replace(/\r/g, '')
 
-    // throw new Error()
     let line = 1, col = 0
     let iter = iterator(fileContent)
     let filedata = {
-        lines: fileContent.split('\n'),
+        lines: fileContent.split(`\n`),
         file: file
     }
 
@@ -157,6 +157,7 @@ const lex = (fileContent, file) => {
     while (iter.next()) {
         let curr = iter.next()
         iter.move()
+
 
         if (curr == '\n') {
             line++
@@ -171,8 +172,14 @@ const lex = (fileContent, file) => {
                 }
                 let prev = tokens[tokens.length - 1]
 
-                if (!('({[.'.includes(next) || ['assigment', 'brackets', 'operator', 'comparator'].includes(prev.type) || ',.'.includes(prev.value) || brackets_map['()'] || brackets_map['[]'])) {
-                    tokens.push({ type: 'delim', value: ';', line: line, col: col })
+                // console.log(brackets_map['()'], brackets_map['[]'])
+                if (!(['assigment', 'brackets', 'operator', 'comparator'].includes(prev.type)
+                    || (',.'.includes(prev.value) && prev.type == 'symbol')
+                    || brackets_map['()']
+                    || brackets_map['[]'])) {
+
+                    if ('({'.includes(next)) {
+                    } else tokens.push({ type: 'delim', value: ';', line: line, col: col })
                 }
             }
         } else if (/[0-9]/.test(curr)) {
@@ -200,9 +207,9 @@ const lex = (fileContent, file) => {
         } else if ('=' == curr) {
             if (iter.next() == '=') {
                 iter.move()
-                if(iter.next() == '=') {
+                if (iter.next() == '=') {
                     iter.move()
-                    tokens.push({ type: 'comparator', value: '===', line: line, col: col })   
+                    tokens.push({ type: 'comparator', value: '===', line: line, col: col })
                 }
                 else tokens.push({ type: 'comparator', value: '==', line: line, col: col })
                 col++
@@ -233,7 +240,7 @@ const lex = (fileContent, file) => {
                     iter.move()
                     col++
                 } else {
-                    tokens.push({ type: 'comparator', value: curr + curr, line: line, col: col })
+                    tokens.push({ type: 'operator', value: curr + curr, line: line, col: col })
                 }
             } else {
                 tokens.push({ type: 'operator', value: curr })
@@ -306,10 +313,10 @@ const lex = (fileContent, file) => {
             } else {
                 tokens.push({ type: 'operator', value: curr, line: line, col: col })
             }
-        } else if(curr == '!') {
+        } else if (curr == '!') {
             if (iter.next() == '=') {
                 iter.move()
-                if(iter.next() == '=') {
+                if (iter.next() == '=') {
                     iter.move()
                     tokens.push({ type: 'comparator', value: '!==', line: line, col: col })
                     col++
@@ -317,9 +324,12 @@ const lex = (fileContent, file) => {
                     tokens.push({ type: 'comparator', value: '!=', line: line, col: col })
                 }
                 col++
-            } else {
-                tokens.push({ type: 'operator', value: curr, line: line, col: col })
-            }
+            } else if (iter.next() == '!') {
+                iter.move()
+                tokens.push({ type: 'operator', value: '!!', line: line, col: col })
+                col++
+            } else tokens.push({ type: 'operator', value: curr, line: line, col: col })
+
         }
         col++
     }
@@ -376,7 +386,7 @@ const lex = (fileContent, file) => {
         }
     }
 
-    parse(tokens)
+    await parse(tokens)
     return true
 }
 

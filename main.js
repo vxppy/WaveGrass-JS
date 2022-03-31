@@ -5,21 +5,37 @@ const lex = require('./lexer')
  * @type { string }
  */
 let file = ''
+const version = 'v0.1.0-beta'
 
-if(process.argv.length > 2) {
-    file = process.argv[2]
+if (process.argv.length > 2) {
+    if(process.argv[2].startsWith('-')) {
+        let token = process.argv[2]
+        if(token[1] == 'v' || token.toLowerCase() == '--version') console.log(version)
+        if(token == '--node-version') console.log(process.version)
+    }
+    else file = process.argv[2]
 } else {
     file = 'main.wg'
 }
 
-if(!file.endsWith('.wg')) {
-    file += '.wg'
+const run = async () => {
+    let path = await new Promise((resolve) => {
+        fs.realpath(file, (error, path) => {
+            resolve(error ? undefined : path)
+        })
+    })
+
+    if(!path) {
+        console.log('File not found. Make sure the file exists')
+    } else {
+        if(fs.statSync(path).isDirectory()) {
+            path += '\\main.wg'
+
+        }
+
+        if(fs.existsSync(path)) await lex(fs.readFileSync(path, 'utf-8'), path)
+        else console.log('File not found. Make sure the file exists')
+    }
 }
 
-
-if(fs.existsSync(`./tests/${file}`)) {
-    const readAble = fs.readFileSync(`./tests/${file}`, 'utf-8')
-    lex(readAble, file)
-} else {
-    console.log('\nFile not found. Make sure it is in the tests folder with \x1b[1m.wg\x1b[0m extension\n')
-}
+if(file) run()
