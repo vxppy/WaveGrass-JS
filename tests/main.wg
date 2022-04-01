@@ -1,5 +1,1 @@
-bools = [true, true, [1, 2]]
-i = 0
-
-bools[2][i] = 2
-print(bools)
+print(2,)

@@ -262,6 +262,8 @@ const parse_params = (tokens) => {
             i = 0
         }
 
+        if (!tokens.length) break
+
         if (tokens[i].value == '(') depths['(']++
         else if (tokens[i].value == ')') depths['(']--
         else if (tokens[i].value == '[') depths['[']++
@@ -269,7 +271,6 @@ const parse_params = (tokens) => {
         else if (tokens[i].value == '{') depths['{']++
         else if (tokens[i].value == '}') depths['{']--
 
-        if (!tokens.length) break
 
         i++
         if (tokens.length == i) {
@@ -300,14 +301,14 @@ const parse_array = (tokens) => {
             i = 0
         }
 
+        if (!tokens.length) break
+
         if (tokens[i].value == '(') depths['(']++
         else if (tokens[i].value == ')') depths['(']--
         else if (tokens[i].value == '[') depths['[']++
         else if (tokens[i].value == ']') depths['[']--
         else if (tokens[i].value == '{') depths['{']++
         else if (tokens[i].value == '}') depths['{']--
-
-        if (!tokens.length) break
 
         i++
         if (tokens.length == i) {
@@ -629,7 +630,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
         if (curr.value == '.') {
 
             if (!prev) throwError()
-            if (!(prev.type == 'string' || prev.type == 'variable' || prev.type == 'number')) throwError()
+            if (!['property', 'string', 'variable', 'number', 'bool', 'null', 'array'].includes(prev.type)) throwError()
 
             let next = []
 
