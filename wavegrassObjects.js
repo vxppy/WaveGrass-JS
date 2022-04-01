@@ -625,10 +625,10 @@ class WaveGrassArray extends WaveGrassObject {
     }
 
     push = (...items) => {
-        for(let i = 0; i < items.length; i++) {
+        for (let i = 0; i < items.length; i++) {
             this.__value[this.length.__value_of__()] = items[i]
             this.length.__value++
-        }   
+        }
         return this.length
     }
 }
@@ -720,7 +720,7 @@ class WaveGrassError extends WaveGrassObject {
 class WaveGrassNull extends WaveGrassObject {
     constructor() {
         super(null)
-        this.__type = null
+        this.__type = 'null'
     }
 
     __bool__ = () => new WaveGrassBoolean(false)

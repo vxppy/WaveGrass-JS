@@ -255,7 +255,7 @@ const operate = async (ast, scope, depth = 0) => {
         if (ast.type == 'variable') {
             ast = getValueOfVariable(ast, scope)
             if (ast.type == 'nf') return ast
-            return ast
+            return ast.value
         } else if (ast.type == 'array') {
             let len = 0
             for (let j in ast.values) {
@@ -910,9 +910,9 @@ const run = async (ast, scope, depth_value = 0) => {
                 else await run({
                     type: 'assignment',
                     lhs: ast.loopvar,
-                    rhs: { type: value.value.__type__(), value: value.index.__value_of__() }
+                    rhs: { type: 'number', value: value.index.__value_of__() }
                 }, lscope, depth_value)
-
+                
                 for (const i of ast.block) {
                     let v = await run(i, lscope, depth_value + 1)
                     if (v) {
