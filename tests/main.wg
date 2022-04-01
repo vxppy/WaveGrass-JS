@@ -1,3 +1,5 @@
-const a = 2.22.2
-print(a)
-a = 3
+bools = [true, true, [1, 2]]
+i = 0
+
+bools[2][i] = 2
+print(bools)

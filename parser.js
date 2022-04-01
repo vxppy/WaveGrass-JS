@@ -17,6 +17,7 @@ const precedence = (token) => {
         case '=':
             return 11
         case '.':
+        case 'property':
             return 10
         case 'typeof':
             return 9
@@ -144,7 +145,7 @@ const to_post_fix_notation = (array) => {
                     else args = args[0]
 
                     array.splice(i + 1, 2, {
-                        type: 'property', property: args, col: array[i].col, line: array[i].line
+                        type: 'property', value: 'property', ktype: '[]', property: args, col: array[i].col, line: array[i].line
                     })
                 }
             }
@@ -227,6 +228,7 @@ const to_post_fix_notation = (array) => {
             }
         }
     }
+
     return result
 }
 const parse_operators = (array) => {
@@ -250,24 +252,22 @@ const parse_params = (tokens) => {
         '{': 0
     }
 
-    let continous = false
-
     while (tokens.length) {
-        if (tokens[i].value == ',' && !Object.values(depths).reduce((a, b) => a + b, 0)) {
+        if (tokens[i].value == ',' && !(depths['('] || depths['['] || depths['{'])) {
+
             let value = parse_operators(tokens.splice(0, i))
-
             params.push(value)
-            tokens.shift()
 
+            tokens.shift()
             i = 0
         }
 
         if (tokens[i].value == '(') depths['(']++
         else if (tokens[i].value == ')') depths['(']--
         else if (tokens[i].value == '[') depths['[']++
-        else if (tokens[i].value == ']') depths[']']--
+        else if (tokens[i].value == ']') depths['[']--
         else if (tokens[i].value == '{') depths['{']++
-        else if (tokens[i].value == '}') depths['}']--
+        else if (tokens[i].value == '}') depths['{']--
 
         if (!tokens.length) break
 
@@ -291,7 +291,7 @@ const parse_array = (tokens) => {
 
     while (tokens.length) {
 
-        if (tokens[i].value == ',' && !Object.values(depths).reduce((a, b) => a + b, 0)) {
+        if (tokens[i].value == ',' && !(depths['('] || depths['['] || depths['{'])) {
             let value = parse_operators(tokens.splice(0, i))
 
             params[indexing++] = value
@@ -303,9 +303,9 @@ const parse_array = (tokens) => {
         if (tokens[i].value == '(') depths['(']++
         else if (tokens[i].value == ')') depths['(']--
         else if (tokens[i].value == '[') depths['[']++
-        else if (tokens[i].value == ']') depths[']']--
+        else if (tokens[i].value == ']') depths['[']--
         else if (tokens[i].value == '{') depths['{']++
-        else if (tokens[i].value == '}') depths['}']--
+        else if (tokens[i].value == '}') depths['{']--
 
         if (!tokens.length) break
 
@@ -374,7 +374,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
 
                 if (args.length > 1) args = { type: 'array', values: parse_array(args) }
                 else args = args[0]
-                return to_ast(iterable, { type: 'property', lhs: prev, values: args, col: curr.col, line: curr.line }, endat, depth)
+                return to_ast(iterable, { type: 'property', ktype: '[]', lhs: prev, values: args, col: curr.col, line: curr.line }, endat, depth)
             }
         }
     } else if (curr.type == 'keyword') {
@@ -626,28 +626,31 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
             }
         }
     } else if (curr.type == 'symbol') {
-        if (!prev) throwError()
-        if (!(prev.type == 'string' || prev.type == 'variable' || prev.type == 'number')) throwError()
+        if (curr.value == '.') {
 
-        let next = []
+            if (!prev) throwError()
+            if (!(prev.type == 'string' || prev.type == 'variable' || prev.type == 'number')) throwError()
 
-        while (iterable.next()) {
-            let n = iterable.next()
-            if (n.value == '=') break
-            if (n.value == endat.value) break
+            let next = []
 
-            next.push(n)
-            iterable.move()
+            while (iterable.next()) {
+                let n = iterable.next()
+                if (n.value == '=') break
+                if (n.value == endat.value) break
+
+                next.push(n)
+                iterable.move()
+            }
+
+            if (!next.length) {
+
+            }
+
+            if (next.length == 1) next = next[0]
+            else next = parse_operators(next)
+
+            return to_ast(iterable, { type: 'property', ktype: '.', lhs: prev, values: next, col: curr.col, line: curr.line }, endat, depth)
         }
-
-        if (!next.length) {
-
-        }
-
-        if (next.length == 1) next = next[0]
-        else next = parse_operators(next)
-
-        return to_ast(iterable, { type: 'property', lhs: prev, values: next, col: curr.col, line: curr.line }, endat, depth)
     }
 }
 /**
