@@ -448,11 +448,12 @@ const assign_property = async (variable, property, value, scope) => {
     }
 
     value = await operate(value.type == 'operation' ? value.value : value)
-    property = property.type == 'operation' ? await operate( property.value) : property
+    property = property.type == 'operation' ? await operate(property.value) : (
+        property.type != 'variable' ? await operate(property) : property)
 
     if (!property) throwError(new WaveGrassError('SyntaxError', 'No property or index was given', 0, 0))
 
-    if(property.type) {
+    if (property.type) {
         return val.__set_property__(property.value, value)
     } else {
         if (property.__type__() == 'array') {
@@ -492,10 +493,14 @@ const get_property = async (variable, property, scope) => {
         val = variable
     }
 
-    property = property.type == 'operation' ? await operate(property.value) : property
-
     if (!property) throwError(new WaveGrassError('SyntaxError', 'No property or index was given', 0, 0))
-    if (property.__type__() == 'array') {
+
+    property = property.type == 'operation' ? await operate(property.value) : (
+        property.type != 'variable' ? await operate(property) : property)
+
+    if (property.type) {
+        return val.__get_property__(property.value)
+    } else if (property.__type__() == 'array') {
         let value = new WaveGrassArray({}, 0)
         let iter = property.__iterator__()
 
@@ -728,7 +733,7 @@ const run = async (ast, scope, depth_value = 0) => {
             }
         } else {
             func = getValueOfVariable(ast.value, scope)
-            
+
             if (func.type == 'nf') {
                 throwError(new WaveGrassError(`Reference Error`, `'${ast.value.value}' is not defined`, ast.value.line, ast.value.col))
             }
@@ -995,10 +1000,10 @@ const run = async (ast, scope, depth_value = 0) => {
             throwError(new WaveGrassError('Syntax Error', 'Unexpcted token \'continue\'', ast.line, ast.col))
         }
         return { type: 'continue' }
-    } else if(ast.type == 'property') {
-        let operation = [ast.lhs, ...(ast.values.type == 'operation' ? ast.values.value : [ast.values] ) ]
-        operation.splice(2, 0, { type: 'symbol', value: '.'})
-        
+    } else if (ast.type == 'property') {
+        let operation = [ast.lhs, ...(ast.values.type == 'operation' ? ast.values.value : [ast.values])]
+        operation.splice(2, 0, { type: 'symbol', value: '.' })
+
         await operate(operation, scope, depth_value)
     }
 }
