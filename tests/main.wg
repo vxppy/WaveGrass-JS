@@ -1,5 +1,2 @@
-a = []
-a[3, 5] = [2, 2]
+a = 2
 print(a)
-print(a.length) 
-print(a[2, 3])
