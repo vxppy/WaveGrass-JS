@@ -306,17 +306,27 @@ const operate = async (ast, scope, depth = 0) => {
                 values.push(conditional_check(ast[i], lhs, rhs))
             }
         } else if (ast[i].type == 'symbol') {
-            let rhs = values.pop(), lhs = values.pop()
-
             if (ast[i].value == ':') {
-                values.push({ type: 'property', lhs: lhs, rhs: rhs })
+                let lhs = values.pop(), rhs = await operate(ast[i].to_operate.type == 'operation' ? ast[i].to_operate.value : ast[i].to_operate)
 
+                values.push({ type: 'property', lhs: lhs, rhs: rhs })
                 let v = ast.slice(i + 1, ast.length).find(i => i.value == ':')
                 if (v) {
                     throwError(new WaveGrassError('Syntax Error', 'Unexpected token \':\'', v.col, v.line))
                 }
+            } else if (ast[i].value == '=') {
+                let lhs = values.pop(), rhs = ast[i].to_operate
+
+                await run({
+                    type: 'assignment',
+                    lhs: lhs,
+                    rhs: rhs
+                }, scope, depth)
+
+                values.push(getValueOfVariable(lhs, scope).value)
             }
             if (ast[i].value == '.') {
+                let rhs = values.pop(), lhs = values.pop()
                 values.push(operate_by_operation(ast[i], lhs, rhs))
             }
         } else {
@@ -331,23 +341,12 @@ const operate = async (ast, scope, depth = 0) => {
             } else if (ast[i].type == 'variable') {
                 if (ast[i + 1] && ast[i + 1].value == '.') {
                 } else {
-                    if (ast[i + 2]) {
-                        if (ast[i + 2].value != ':') {
-                            let v = getValueOfVariable(ast[i], scope)
-                            // console.log(v, ast[i], scope)
-                            // console.log(scopes['global'])
-
-                            if (v.type == 'nf') {
-                                if (!ast[i + 1] || !['!', '!!'].includes(ast[i + 1].value)) throwError(new WaveGrassError('ReferenceError', `'${ast[i].value}' is not defined`, ast[i].col, ast[i].line))
-                                ast[i] = v
-                            } else ast[i] = v.value
-                        }
+                    let v = getValueOfVariable(ast[i], scope)
+                    if (v.type == 'nf') {
+                        if (!ast[i + 1] || !['!', '!!', ':', '='].includes(ast[i + 1].value)) throwError(new WaveGrassError('ReferenceError', `'${ast[i].value}' is not defined`, ast[i].col, ast[i].line))
+                        ast[i] = { ...ast[i], type: 'nf' }
                     } else {
-                        let v = getValueOfVariable(ast[i], scope)
-                        if (v.type == 'nf') {
-                            if (!ast[i + 1] || !['!', '!!'].includes(ast[i + 1].value)) throwError(new WaveGrassError('ReferenceError', `'${ast[i].value}' is not defined`, ast[i].col, ast[i].line))
-                            ast[i] = v
-                        } else ast[i] = v.value
+                        if (!ast[i + 1] || !['!', '!!', ':', '='].includes(ast[i + 1].value)) ast[i] = v.value
                     }
                 }
             } else {
@@ -1016,6 +1015,10 @@ const run = async (ast, scope, depth_value = 0) => {
         operation.splice(2, 0, { type: 'symbol', value: '.' })
 
         await operate(operation, scope, depth_value)
+    } else if (ast.type == 'throw') {
+        // if (ast.value) { }
+        // else 
+        throwError(new WaveGrassError('Error', 'Unexpected error occured', ast.col, ast.line))
     }
 }
 

@@ -8,10 +8,10 @@ let file = ''
 const version = 'v0.1.1-beta'
 
 if (process.argv.length > 2) {
-    if(process.argv[2].startsWith('-')) {
+    if (process.argv[2].startsWith('-')) {
         let token = process.argv[2]
-        if(token[1] == 'v' || token.toLowerCase() == '--version') console.log(version)
-        if(token == '--node-version') console.log(process.version)
+        if (token[1] == 'v' || token.toLowerCase() == '--version') console.log(version)
+        if (token == '--node-version') console.log(process.version)
     }
     else file = process.argv[2]
 } else {
@@ -25,17 +25,17 @@ const run = async () => {
         })
     })
 
-    if(!path) {
+    if (!path) {
         console.log('File not found. Make sure the file exists')
     } else {
-        if(fs.statSync(path).isDirectory()) {
+        if (fs.statSync(path).isDirectory()) {
             path += '\\main.wg'
 
         }
 
-        if(fs.existsSync(path)) await lex(fs.readFileSync(path, 'utf-8'), path)
+        if (fs.existsSync(path)) await lex(fs.readFileSync(path, 'utf-8'), path)
         else console.log('File not found. Make sure the file exists')
     }
 }
 
-if(file) run()
+if (file) run()
