@@ -79,19 +79,21 @@ const parseNum = (iterable, current, dot = false, line, col) => {
     while (iterable.next()) {
         let curr = iterable.next()
         change++
-        if (!/[0-9]/.test(curr)) break
+
+        if (!/[0-9.]/.test(curr)) break
 
         if (dot) {
             if (curr == '.') {
-                throwError(new WaveGrassError('Syntax Error', 'Unexpected property accessor', line, col))
+                throwError(new WaveGrassError('SyntaxError', 'Unexpected property accessor', col, line))
             }
         } else {
             if (curr == '.') dot = true
         }
-        iterable.move()
-        ret.push(curr)
-    }
 
+        ret.push(curr)
+        iterable.move()
+    }
+    
     ret = ret.join('')
     ret = ret.includes('.') ? parseFloat(ret) : parseInt(ret)
 

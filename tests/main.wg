@@ -1,1 +1,3 @@
-print(typeof print)
+const a = 2.22.2
+print(a)
+a = 3

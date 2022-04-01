@@ -442,8 +442,8 @@ const find_scope_that_matches = (start, ...values) => {
 
 const assign_property = async (variable, property, value, scope) => {
     let val;
-    if (property.type == 'property') {
-        val = await get_property(variable, variable.values, scope)
+    if (variable.type == 'property') {
+        val = await get_property(variable.lhs, variable.values, scope)
     } else if (!variable.__type__) {
         if (variable.type == 'variable') {
             val = getValueOfVariable(variable, scope)
@@ -459,6 +459,7 @@ const assign_property = async (variable, property, value, scope) => {
     }
 
     value = await operate(value.type == 'operation' ? value.value : value)
+
     property = property.type == 'operation' ? await operate(property.value) : (
         property.type != 'variable' ? await operate(property) : property)
 
