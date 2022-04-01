@@ -1,9 +1,1 @@
-a = [2, "string", true, null]
-
-for char in a {
-    print(char, end:", ", colored: true)
-}
-
-for char of a {
-    print(char, end:", ", colored: true)
-}
+print(typeof print)

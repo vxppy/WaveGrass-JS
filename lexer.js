@@ -4,7 +4,7 @@ const throwError = require("./throwError")
 const { WaveGrassError } = require("./wavegrassObjects")
 
 const keyword = [
-    "if", "else", "define", "break", "return", "continue", "let", "const", "hoist", 'while', 'for', 'in', 'of', 'throw'
+    "if", "else", "define", "break", "return", "continue", "let", "const", "hoist", 'while', 'for', 'in', 'of', 'throw', 'typeof'
 ]
 const brackets_map = {
     '()': 0,
@@ -171,7 +171,6 @@ const lex = async (fileContent, file) => {
                 }
                 let prev = tokens[tokens.length - 1]
 
-                // console.log(brackets_map['()'], brackets_map['[]'])
                 if (!(['assigment', 'brackets', 'operator', 'comparator'].includes(prev.type)
                     || (',.'.includes(prev.value) && prev.type == 'symbol')
                     || brackets_map['()']

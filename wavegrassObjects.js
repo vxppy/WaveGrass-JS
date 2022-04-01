@@ -4,7 +4,7 @@ class WaveGrassObject {
 
     constructor(value) {
         this.__value = value
-        this.__type = 'Object'
+        this.__type = 'object'
         this.__mutable = false
         this.__properties = {}
     }
@@ -254,7 +254,6 @@ class WaveGrassObject {
         return new WaveGrassBoolean(false)
     }
 }
-
 
 class WaveGrassNumber extends WaveGrassObject {
     constructor(value) {

@@ -15,8 +15,10 @@ const precedence = (token) => {
     switch (value) {
         case ':':
         case '=':
-            return 10
+            return 11
         case '.':
+            return 10
+        case 'typeof':
             return 9
         case '**':
         case '++':
