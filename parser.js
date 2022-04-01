@@ -139,6 +139,7 @@ const to_post_fix_notation = (array) => {
 
                     let args = array.splice(i + 2, foundIndex - i - 2)
                     if (args.length > 1) args = { type: 'array', values: parse_array(args) }
+                    else args = args[0]
 
                     array.splice(i + 1, 2, {
                         type: 'property', property: args, col: array[i].col, line: array[i].line
