@@ -469,11 +469,13 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
 
             let loopvar, cond, step;
 
-            if (cond_data.find(i => i.type == ',')) {
+            if (cond_data.find(i => i.value == ',')) {
                 cond_data = parse_params(cond_data)
-
                 iterable.move()
-                [loopvar, cond, step] = [...cond_data]
+
+                loopvar = cond_data[0]
+                cond = cond_data[1]
+                step = cond_data[2]
 
                 if (!loopvar || loopvar.token == 'missing' || (loopvar.type == 'operation' && !loopvar.value.length)) {
                     throwError(new WaveGrassError('Syntax Error', 'Missing variable for the loop', curr.col + 3, curr.line))
@@ -488,7 +490,8 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
                 }
 
                 if (loopvar.type == 'operation') {
-                    loopvar.value.splice(1, 1, loopvar.value[2], loopvar.value[1])
+                    loopvar.value.splice(1, 2, loopvar.value[2], loopvar.value[1])
+                    loopvar.value.push({ type: 'delim', value: ';'})
 
                     let iter = iterator(loopvar.value)
                     while (iter.next()) {
@@ -592,11 +595,11 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
     } else if (curr.type == 'operator') {
         if (curr.value == '++') {
             if (prev) {
-                return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { operation: { type: 'operator', value: '+' }, lhs: prev, rhs: { type: 'number', value: 1 } } }, endat, depth)
+                return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { type: 'operation', value: [prev, { type: 'operator', value: '++', line: prev.line, col: prev.col}] } }, endat, depth)
             }
         } else if (curr.value == '--') {
             if (prev) {
-                return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { operation: { type: 'operator', value: '-' }, lhs: prev, rhs: { type: 'number', value: 1 } } }, endat, depth)
+                return to_ast(iterable, { type: 'assignment', lhs: prev, rhs: { type: 'operation', value: [prev, { type: 'operatior', value: '--', line: prev.line, col: prev.col }] } }, endat, depth)
             }
         }
     } else if (curr.type == 'symbol') {
@@ -605,20 +608,20 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
 
         let next = []
 
-        while(iterable.next()) {
+        while (iterable.next()) {
             let n = iterable.next()
-            if(n.value == '=') break
-            if(n.value == endat.value) break
+            if (n.value == '=') break
+            if (n.value == endat.value) break
 
             next.push(n)
             iterable.move()
         }
 
-        if(!next.length) {
+        if (!next.length) {
 
         }
 
-        if(next.length == 1) next = next[0]
+        if (next.length == 1) next = next[0]
         else next = parse_operators(next)
 
         return to_ast(iterable, { type: 'property', lhs: prev, values: next, col: curr.col, line: curr.line }, endat, depth)

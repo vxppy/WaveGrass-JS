@@ -88,7 +88,7 @@ const parseNum = (iterable, current, dot = false, line, col) => {
         } else {
             if (curr == '.') dot = true
         }
-
+        iterable.move()
         ret.push(curr)
     }
 
@@ -158,7 +158,6 @@ const lex = async (fileContent, file) => {
         let curr = iter.next()
         iter.move()
 
-
         if (curr == '\n') {
             line++
             col = 0
@@ -176,7 +175,8 @@ const lex = async (fileContent, file) => {
                 if (!(['assigment', 'brackets', 'operator', 'comparator'].includes(prev.type)
                     || (',.'.includes(prev.value) && prev.type == 'symbol')
                     || brackets_map['()']
-                    || brackets_map['[]'])) {
+                    || brackets_map['[]']
+                    || prev.value == ';')) {
 
                     if ('({'.includes(next)) {
                     } else tokens.push({ type: 'delim', value: ';', line: line, col: col })

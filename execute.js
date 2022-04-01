@@ -255,7 +255,7 @@ const operate = async (ast, scope, depth = 0) => {
         if (ast.type == 'variable') {
             ast = getValueOfVariable(ast, scope)
             if (ast.type == 'nf') return ast
-            ast[i] = ast[i].value
+            return ast
         } else if (ast.type == 'array') {
             let len = 0
             for (let j in ast.values) {
@@ -334,6 +334,9 @@ const operate = async (ast, scope, depth = 0) => {
                     if (ast[i + 2]) {
                         if (ast[i + 2].value != ':') {
                             let v = getValueOfVariable(ast[i], scope)
+                            // console.log(v, ast[i], scope)
+                            // console.log(scopes['global'])
+
                             if (v.type == 'nf') {
                                 if (!ast[i + 1] || !['!', '!!'].includes(ast[i + 1].value)) throwError(new WaveGrassError('ReferenceError', `'${ast[i].value}' is not defined`, ast[i].col, ast[i].line))
                                 ast[i] = v
@@ -641,7 +644,7 @@ const run = async (ast, scope, depth_value = 0) => {
 
             if (ast.rhs.type == 'operation') {
                 let value = {
-                    changeable: ast.lhs.changeable,
+                    changeable: ast.lhs.changeable ?? true,
                     value: await operate(ast.rhs.value, scope, depth_value)
                 }
                 place.set(ast.lhs.value, value)
@@ -789,7 +792,7 @@ const run = async (ast, scope, depth_value = 0) => {
                 if (isNaN(i)) {
                     let index = params.indexOf(i)
                     if (index !== null) {
-                        scopes[lscope].map.set(i, args[i])
+                        scopes[lscope].map.set(i, { changeable: true, value: args[i] })
                         params.splice(index, 1)
                     }
                 }
@@ -797,9 +800,11 @@ const run = async (ast, scope, depth_value = 0) => {
             for (let i = 0; i < params.length; i++) {
                 scopes[lscope].map.set(params[i], args[i] ?? new WaveGrassNull())
             }
+
             let ret_val;
             for (const i of func.__get_statements__()) {
                 ret_val = await run(i, lscope, depth_value + 1)
+
                 if (ret_val) {
                     if (ret_val.type == 'return') break
                 }
@@ -877,8 +882,13 @@ const run = async (ast, scope, depth_value = 0) => {
             parent: scope,
             map: new Map()
         }
+
         if (ast.loopvar.type == 'assignment') {
             ast.loopvar = await run(ast.loopvar, lscope, depth_value)
+        }
+
+        if (!ast.loopvar.changeable) {
+            ast.loopvar.changeable = true
         }
 
         let out = false, ret = false
@@ -956,6 +966,7 @@ const run = async (ast, scope, depth_value = 0) => {
         if (ast.condition.type != 'operation') {
             ast.condition = { type: 'operation', value: [ast.condition] }
         }
+
         let out = false, ret = false
         while ((await operate(ast.condition.value, scope)).__bool__().__value_of__()) {
             for (const i of ast.block) {
@@ -972,7 +983,6 @@ const run = async (ast, scope, depth_value = 0) => {
                     }
                 }
             }
-
             if (out) break
         }
         scopes[lscope] = undefined
@@ -985,6 +995,7 @@ const run = async (ast, scope, depth_value = 0) => {
             if (s == 'global') throwError(new WaveGrassError('Syntax Error', 'Unexpcted token \'return\'', ast.line, ast.col))
             else break
         }
+
         return { type: 'return', value: await operate(ast.value.type == 'operation' ? ast.value.value : ast.value, scope, depth_value) }
     } else if (ast.type == 'break') {
         let br = find_scope_that_matches(scope, ...breakable)
