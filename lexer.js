@@ -74,7 +74,7 @@ const parseDelim = (iterable, delim, type = 'string', line, col) => {
  */
 const parseNum = (iterable, current, dot = false, line, col) => {
     let ret = [current]
-    let change = 0
+    let change = -1
 
     while (iterable.next()) {
         let curr = iterable.next()
@@ -110,7 +110,7 @@ const parseNum = (iterable, current, dot = false, line, col) => {
  */
 const parseName = (iterable, current, line, col) => {
     let ret = [current]
-    let change = 0
+    let change = -1
 
     while (iterable.next()) {
         let curr = iterable.next()
@@ -161,16 +161,19 @@ const lex = async (fileContent, file) => {
         iter.move()
 
         if (curr == '\n') {
+            let l = line
+            let c = col
             line++
             col = 0
             if (tokens.length) {
-                let next = ' ';
-                while (next == ' ') {
+                let next;
+                do {
                     next = iter.next()
                     if (next != ' ') break
                     col++
                     iter.move()
-                }
+                } while (next == ' ')
+                col -= 1
                 let prev = tokens[tokens.length - 1]
 
                 if (!(['assigment', 'brackets', 'operator', 'comparator'].includes(prev.type)
@@ -180,13 +183,13 @@ const lex = async (fileContent, file) => {
                     || prev.value == ';')) {
 
                     if ('({'.includes(next)) {
-                    } else tokens.push({ type: 'delim', value: ';', line: line, col: col })
+                    } else tokens.push({ type: 'delim', value: ';', line: l, col: c })
                 }
             }
         } else if (/[0-9]/.test(curr)) {
             let value = parseNum(iter, curr, false, line, col)
-            col += value.change
             tokens.push(value.data)
+            col += value.change
         } else if (/[#_a-zA-Z]/.test(curr)) {
             let value = parseName(iter, curr, line, col)
             col += value.change

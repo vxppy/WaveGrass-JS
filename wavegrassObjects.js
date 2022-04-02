@@ -225,7 +225,7 @@ class WaveGrassObject {
 
     __in__ = rval => {
         let iter = rval.__iterator__()
-        if (iter.__value_of__ && iter.__value_of__() == null) {
+        if (iter.__type__&& iter.__type__() == 'null') {
             return new WaveGrassError('TypeError', `<class ${this.__type__()}> is not iterable`)
         } else {
             if (this.__value_of__() == '') return new WaveGrassBoolean(true)
@@ -242,7 +242,7 @@ class WaveGrassObject {
 
     __of__ = rval => {
         let iter = rval.__iterator__()
-        if (iter.__value_of__ && iter.__value_of__() == null) {
+        if (iter.__type__&& iter.__type__() == 'null') {
             return new WaveGrassError('TypeError', `<class ${this.__type__()}> is not iterable`)
         } else {
             let value = iter.next()
@@ -520,7 +520,7 @@ class WaveGrassArray extends WaveGrassObject {
     __add__ = rval => {
         let iter = rval.__iterator__()
 
-        if (iter.__value_of__ && iter.__value_of__() == null) {
+        if (iter.__value_of__ && iter.__type__() == 'null') {
             return new WaveGrassError('TypeError', `<class ${this.__type__()}> is not iterable`)
         }
 
@@ -550,7 +550,7 @@ class WaveGrassArray extends WaveGrassObject {
     __r_add__ = rval => {
         let iter = rval.__iterator__()
 
-        if (iter.__value_of__ && iter.__value_of__() == null) {
+        if (iter.__type__&& iter.__type__() == 'null') {
             return new WaveGrassError('TypeError', `<class ${this.__type__()}> is not iterable`)
         }
 

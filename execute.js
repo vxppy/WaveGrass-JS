@@ -179,12 +179,12 @@ const operate_by_operation = (opp, lhs, rhs) => {
         lhs.__value = lhs.__sub__(new WaveGrassNumber(1)).__value_of__()
         value = old_value
     } else if (opp.value == '&') {
-        value == lhs.__b_and__(rhs)
+        value = lhs.__b_and__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__r_and__(lhs)
         if (WaveGrassError.isError(value)) value = lhs.__r_b_and__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__b_and__(lhs)
     } else if (opp.value == '^') {
-        value == lhs.__b_xor__(rhs)
+        value = lhs.__b_xor__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__r_b_xor__(lhs)
         if (WaveGrassError.isError(value)) value = lhs.__r_b_xor__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__b_xor__(lhs)
@@ -345,47 +345,56 @@ const operate = async (ast, scope, depth = 0) => {
                 values.push(operate_by_operation(ast[i], lhs, rhs))
             }
         } else {
-            if (ast[i].type == 'call') {
+            let vl = ast[i]
+            if (vl.type == 'call') {
                 let variable = values.pop()
                 if (variable.__type__() == 'method') {
-                    ast[i].value = variable
-                    ast[i] = await run(ast[i], scope, depth)
+                    vl.value = variable
+                    vl = await run(vl, scope, depth)
                 } else {
-                    throwError(new WaveGrassError('TypeError', `'${variable.__value_of__()}' of <class ${variable.__type__()}> is not callabe`, ast[i].col, ast[i].line))
+                    throwError(new WaveGrassError('TypeError', `'${variable.__value_of__()}' of <class ${variable.__type__()}> is not callabe`, vl.col, vl.line))
                 }
-            } else if (ast[i].type == 'variable') {
+            } else if (vl.type == 'variable') {
                 if (ast[i + 1] && ast[i + 1].value == '.') {
                 } else {
-                    let v = getValueOfVariable(ast[i], scope)
+                    let v = getValueOfVariable(vl, scope)
                     if (v.type == 'nf') {
-                        if (!ast[i + 1] || !['!', '!!', ':', '='].includes(ast[i + 1].value)) throwError(new WaveGrassError('ReferenceError', `'${ast[i].value}' is not defined`, ast[i].col, ast[i].line))
-                        ast[i] = { ...ast[i], type: 'nf' }
+                        if (!ast[i + 1] || !['!', '!!', ':', '='].includes(ast[i + 1].value)) throwError(new WaveGrassError('ReferenceError', `'${vl.value}' is not defined`, vl.col, vl.line))
+                        vl = { ...vl, type: 'nf' }
                     } else {
-                        if (!ast[i + 1] || !['!', '!!', ':', '='].includes(ast[i + 1].value)) ast[i] = v.value
+                        if (!ast[i + 1] || !['!', '!!', ':', '='].includes(ast[i + 1].value)) vl = v.value
                     }
                 }
             } else {
-                if (ast[i].type == 'array') {
+                if (vl.type == 'array') {
                     let len = 0
-                    for (let j in ast[i].values) {
-                        if (ast[i].values[j].type == 'variable') {
-                            let v = getValueOfVariable(ast[i].values[j], scope)
-                            if (v.type == 'nf') throwError(new WaveGrassError('ReferenceError', `'${ast[i].values[j].value}' is not defined`, ast[i].values[j].col, ast[i].values[j].line))
-                            ast[i].values[j] = v.value
-                        } else if (ast[i].values[j].type == 'operation') {
-                            ast[i].values[j] = await operate(ast[i].values[j].value, scope, depth)
-                        } else ast[i].values[j] = createObject(ast[i].values[j].type, ast[i].values[j].value)
+                    for (let j in vl.values) {
+                        if (vl.values[j].type == 'variable') {
+                            let v = getValueOfVariable(vl.values[j], scope)
+                            if (v.type == 'nf') throwError(new WaveGrassError('ReferenceError', `'${vl.values[j].value}' is not defined`, vl.values[j].col, vl.values[j].line))
+                            vl.values[j] = v.value
+                        } else if (vl.values[j].type == 'operation') {
+                            vl.values[j] = await operate(vl.values[j].value, scope, depth)
+                        } else vl.values[j] = createObject(vl.values[j].type, vl.values[j].value)
                         len++
                     }
-                    ast[i] = new WaveGrassArray(ast[i].values, len)
+                    vl = new WaveGrassArray(vl.values, len)
                 }
-                else if (!(ast[i] instanceof WaveGrassObject)) ast[i] = createObject(ast[i].type, ast[i].value)
+                else if (!(vl instanceof WaveGrassObject)) vl = createObject(vl.type, vl.value)
             }
-            values.push(ast[i])
+            values.push(vl)
         }
     }
 
-    if (values.length > 1) throwError(new WaveGrassError('Syntax Error', `Unexpected token ${values[1].value ?? values[1].__value_of__()}`, values[1].col, values[1].line))
+    if (values.length > 1) {
+        let token = ast.findIndex(i => unary.includes(i.value))
+        if(token == -1) token = ast.findIndex(i => !['string', 'number', 'varialbe', 'null', 'array', 'call'].includes(i.type))
+
+        // console.log(token)
+        // console.log(['string', 'number', 'varialbe', 'null', 'array', 'call'].includes(i.type))
+        // console.log(token)
+        throwError(new WaveGrassError('Syntax Error', `Unexpected token`, ast[token - 1].col, ast[token - 1].line))
+    }
     return values[0]
 }
 
@@ -910,8 +919,8 @@ const run = async (ast, scope, depth_value = 0) => {
             let iteratable = (await (operate(ast.change, scope, depth_value)))
             let iterator = iteratable.__iterator__()
 
-            if (iterator.__type__ && iterator.__type__() == null) {
-                throwError(new WaveGrassError('TypeError', `<class ${iteratable.__type__()}> object is not an iterable`, ast.condition.type.col + 1, ast.condition.type.line))
+            if (iterator.__type__ && iterator.__type__() == 'null') {
+                throwError(new WaveGrassError('TypeError', `<class ${iteratable.__type__()}> object is not an iterable`, ast.change.col, ast.change.line))
             }
 
             let value = iterator.next()
