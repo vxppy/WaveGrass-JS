@@ -4,7 +4,7 @@ class WaveGrassObject {
 
     constructor(value) {
         this.__value = value
-        this.__type = 'Object'
+        this.__type = 'object'
         this.__mutable = false
         this.__properties = {}
     }
@@ -255,7 +255,6 @@ class WaveGrassObject {
     }
 }
 
-
 class WaveGrassNumber extends WaveGrassObject {
     constructor(value) {
         super(value)
@@ -290,6 +289,9 @@ class WaveGrassNumber extends WaveGrassObject {
 
     __mul__ = rval => {
         let old_type = rval.__type__(), old_value = rval.__value_of__()
+        if (old_type == 'array') {
+            return rval.__mul__(this)
+        }
         rval = WaveGrassNumber.parseInt(rval, 10)
 
         if (old_type == 'string' && isNaN(rval.__value_of__())) {
@@ -503,7 +505,7 @@ class WaveGrassArray extends WaveGrassObject {
             } else {
                 if (v.__type__() == 'array') {
                     if (globalDepth == depth) {
-                        str.push('[Array]')
+                        str.push(colored ? `\x1b[36m[Array]\x1b[0m` : '[Array]')
                     } else {
                         str.push(v.__string__(colored, depth + 1))
                     }
@@ -518,53 +520,70 @@ class WaveGrassArray extends WaveGrassObject {
     __add__ = rval => {
         let iter = rval.__iterator__()
 
-        let obj = {}
-        for (let i in this.__value) {
-            obj[i] = this.__value[i]
-        }
-
-        let arr = new WaveGrassArray(structuredClone(this.__value), this.length.__value_of__())
-
         if (iter.__value_of__ && iter.__value_of__() == null) {
             return new WaveGrassError('TypeError', `<class ${this.__type__()}> is not iterable`)
-        } else {
-            if (rval.__value_of__() == '') {
-                arr.__value[arr.length.__value_of__()] = rval
-                arr.length.__value++
-                return
-            }
-            let value = iter.next()
-            do {
-                arr.__value[arr.length.__value_of__()] = value.value
-                value = iter.next()
-                arr.length.__value++
-            } while (!value.finished.__value_of__())
-            return arr
         }
+
+        let arr = new WaveGrassArray({}, 0)
+
+        let len = this.length.__value_of__()
+        for (let i = 0; i < len; i++) {
+            if (this.__value[i].__type__() == 'array') {
+                arr.push(this.__value[i])
+            } else if (this.__value[i].__type__() == 'method') {
+                arr.push(createObject('method', this.__value[i].__name__(), this.__value[i].__get_args__(), this.__value[i].__get_statements__(), this.__value[i].__internal__()))
+            } else arr.push(createObject(this.__value[i].__type__(), this.__value[i].__value_of__()))
+        }
+
+        if (rval.__value_of__() == '') {
+            arr.push(rval)
+            return
+        }
+        let value = iter.next()
+        do {
+            arr.push(value.value)
+            value = iter.next()
+        } while (!value.finished.__value_of__())
+        return arr
     }
 
     __r_add__ = rval => {
         let iter = rval.__iterator__()
-        let arr = new WaveGrassArray({}, 0)
 
         if (iter.__value_of__ && iter.__value_of__() == null) {
             return new WaveGrassError('TypeError', `<class ${this.__type__()}> is not iterable`)
-        } else {
-            if (rval.__value_of__() == '') {
-                arr.__value[arr.length.__value_of__()] = rval
-                arr.length.__value++
-                return
-            }
-            let value = iter.next()
-            do {
-                arr.__value[arr.length.__value_of__()] = value.value
-                value = iter.next()
-                arr.length.__value++
-            } while (!value.finished.__value_of__())
+        }
 
-            let len = this.length.__value_of__()
+        let arr = new WaveGrassArray({}, 0)
+        if (rval.__value_of__() == '') {
+            arr.push(rval)
+            return
+        }
+
+        let value = iter.next()
+        do {
+            arr.push(value.value)
+            value = iter.next()
+        } while (!value.finished.__value_of__())
+
+        let len = this.length.__value_of__()
+        for (let i = 0; i < len; i++) {
+            arr.__value.push(this[i])
+        }
+
+        return arr
+    }
+
+    __mul__ = rval => {
+        let val = parseInt(rval.__value_of__(), 10)
+
+        if (isNaN(val)) {
+            return new WaveGrassError(`Cannot multiply <class ${rval.__type__()}> and <class array>`)
+        } else {
+            let arr = new WaveGrassArray({}, 0)
+            let len = this.length.__value_of__() * val
             for (let i = 0; i < len; i++) {
-                arr.__value[i + arr.length.__value_of__()] = this[i]
+                arr.push(this.__value[i % val])
             }
             return arr
         }
@@ -625,10 +644,10 @@ class WaveGrassArray extends WaveGrassObject {
     }
 
     push = (...items) => {
-        for(let i = 0; i < items.length; i++) {
+        for (let i = 0; i < items.length; i++) {
             this.__value[this.length.__value_of__()] = items[i]
             this.length.__value++
-        }   
+        }
         return this.length
     }
 }
@@ -720,7 +739,7 @@ class WaveGrassError extends WaveGrassObject {
 class WaveGrassNull extends WaveGrassObject {
     constructor() {
         super(null)
-        this.__type = null
+        this.__type = 'null'
     }
 
     __bool__ = () => new WaveGrassBoolean(false)

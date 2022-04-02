@@ -4,7 +4,7 @@ const throwError = require("./throwError")
 const { WaveGrassError } = require("./wavegrassObjects")
 
 const keyword = [
-    "if", "else", "define", "break", "return", "continue", "let", "const", "hoist", 'while', 'for', 'in', 'of', 'throw'
+    "if", "else", "define", "break", "return", "continue", "let", "const", "hoist", 'while', 'for', 'in', 'of', 'throw', 'typeof'
 ]
 const brackets_map = {
     '()': 0,
@@ -79,19 +79,21 @@ const parseNum = (iterable, current, dot = false, line, col) => {
     while (iterable.next()) {
         let curr = iterable.next()
         change++
-        if (!/[0-9]/.test(curr)) break
+
+        if (!/[0-9.]/.test(curr)) break
 
         if (dot) {
             if (curr == '.') {
-                throwError(new WaveGrassError('Syntax Error', 'Unexpected property accessor', line, col))
+                throwError(new WaveGrassError('SyntaxError', 'Unexpected property accessor', col, line))
             }
         } else {
             if (curr == '.') dot = true
         }
-        iterable.move()
-        ret.push(curr)
-    }
 
+        ret.push(curr)
+        iterable.move()
+    }
+    
     ret = ret.join('')
     ret = ret.includes('.') ? parseFloat(ret) : parseInt(ret)
 
@@ -171,7 +173,6 @@ const lex = async (fileContent, file) => {
                 }
                 let prev = tokens[tokens.length - 1]
 
-                // console.log(brackets_map['()'], brackets_map['[]'])
                 if (!(['assigment', 'brackets', 'operator', 'comparator'].includes(prev.type)
                     || (',.'.includes(prev.value) && prev.type == 'symbol')
                     || brackets_map['()']

@@ -25,7 +25,7 @@ scopes['global'].map.set('parseNum', { value: parseNum, changeable: true })
 scopes['global'].map.set('isNaN', { value: _isNaN, changeable: true })
 
 
-const unary = ['!', '~', '!!', '~~', '_-', '_+', '++', '_++', '--', '_--', 'property']
+const unary = ['!', '~', '!!', '~~', '_-', '_+', '++', '_++', '--', '_--', 'property', 'typeof']
 
 const toString = async (tokens, sep, colored) => {
     let str = []
@@ -223,6 +223,10 @@ const operate_by_operation = (opp, lhs, rhs) => {
         if (typeof value == 'function') {
             value = new WaveGrassFunction(rhs.value, ['*n'], `<internal_${rhs.value}>`, true, lhs)
         }
+
+        if (!(value instanceof WaveGrassObject)) value = createObject(typeof value, value)
+    } else if (opp.value == 'typeof') {
+        value = createObject('string', lhs.__type__())
     } else {
         value = new WaveGrassNull()
     }
@@ -255,7 +259,7 @@ const operate = async (ast, scope, depth = 0) => {
         if (ast.type == 'variable') {
             ast = getValueOfVariable(ast, scope)
             if (ast.type == 'nf') return ast
-            return ast
+            return ast.value
         } else if (ast.type == 'array') {
             let len = 0
             for (let j in ast.values) {
@@ -281,7 +285,7 @@ const operate = async (ast, scope, depth = 0) => {
 
     for (let i = 0; i < ast.length; i++) {
         if (ast[i].type == 'property') {
-            values.push(get_property(values.pop(), ast[i].property, scope))
+            values.push(await get_property(values.pop(), ast[i].ktype, ast[i].property, scope, depth))
         } else if (ast[i].type == 'operator') {
             if (unary.includes(ast[i].value)) {
                 values.push(operate_by_operation(ast[i], values.pop()))
@@ -298,7 +302,18 @@ const operate = async (ast, scope, depth = 0) => {
                     values.push(operate_by_operation(ast[i], lhs, rhs))
                 }
             }
-        } else if (ast[i].type == 'comparator' || ast[i].type == 'keyword') {
+        } else if (ast[i].type == 'keyword') {
+            if (ast[i].value != 'typeof') {
+                if (unary.includes(ast[i].value)) {
+                    values.push(conditional_check(ast[i], values.pop()))
+                } else {
+                    let rhs = values.pop(), lhs = values.pop()
+                    values.push(conditional_check(ast[i], lhs, rhs))
+                }
+            } else {
+                values.push(operate_by_operation(ast[i], values.pop()))
+            }
+        } else if (ast[i].type == 'comparator') {
             if (unary.includes(ast[i].value)) {
                 values.push(conditional_check(ast[i], values.pop()))
             } else {
@@ -355,7 +370,7 @@ const operate = async (ast, scope, depth = 0) => {
                     for (let j in ast[i].values) {
                         if (ast[i].values[j].type == 'variable') {
                             let v = getValueOfVariable(ast[i].values[j], scope)
-                            if (v == 'nf') throwError(new WaveGrassError('ReferenceError', `'${ast[i].values[j].value}' is not defined`, ast[i].values[j].col, ast[i].values[j].line))
+                            if (v.type == 'nf') throwError(new WaveGrassError('ReferenceError', `'${ast[i].values[j].value}' is not defined`, ast[i].values[j].col, ast[i].values[j].line))
                             ast[i].values[j] = v.value
                         } else if (ast[i].values[j].type == 'operation') {
                             ast[i].values[j] = await operate(ast[i].values[j].value, scope, depth)
@@ -425,18 +440,16 @@ const find_scope_that_matches = (start, ...values) => {
     return
 }
 
-const assign_property = async (variable, property, value, scope) => {
-
+const assign_property = async (variable, ktype, property, value, scope, depth) => {
     let val;
     if (variable.type == 'property') {
-        val = await get_property(variable.lhs, variable.values, scope)
+        val = await get_property(variable.lhs, ktype, variable.values, scope, depth)
     } else if (!variable.__type__) {
         if (variable.type == 'variable') {
             val = getValueOfVariable(variable, scope)
         } else {
             val = createObject(variable.type, variable.value)
         }
-
         if (val.type == 'nf') {
             throwError(new WaveGrassError('Reference Error', `'${variable.value}' is not defined`, variable.col, variable.line))
         }
@@ -445,15 +458,17 @@ const assign_property = async (variable, property, value, scope) => {
         val = variable
     }
 
-    if (!val.__mutable__()) {
-        throwError(new WaveGrassError('TypeError', 'Cannot change value of an immutable', property.col, property.line))
-    }
-
     value = await operate(value.type == 'operation' ? value.value : value)
-    property = property.type == 'operation' ? await operate(property.value) : (
-        property.type != 'variable' ? await operate(property) : property)
 
     if (!property) throwError(new WaveGrassError('SyntaxError', 'No property or index was given', 0, 0))
+
+    if (ktype == '[]') {
+        if (!val.__mutable__()) {
+            throwError(new WaveGrassError('TypeError', 'Cannot change value of an immutable', val.col, val.line))
+        }
+
+        property = await operate(property.type == 'operation' ? property.value : property, scope, depth)
+    }
 
     if (property.type) {
         return val.__set_property__(property.value, value)
@@ -478,7 +493,7 @@ const assign_property = async (variable, property, value, scope) => {
     }
 }
 
-const get_property = async (variable, property, scope) => {
+const get_property = async (variable, ktype, property, scope, depth) => {
     let val;
     if (!variable.__type__) {
         if (variable.type == 'variable') {
@@ -497,8 +512,9 @@ const get_property = async (variable, property, scope) => {
 
     if (!property) throwError(new WaveGrassError('SyntaxError', 'No property or index was given', 0, 0))
 
-    property = property.type == 'operation' ? await operate(property.value) : (
-        property.type != 'variable' ? await operate(property) : property)
+    if (ktype == '[]') {
+        property = await operate(property.type == 'operation' ? property.value : property, scope, depth)
+    }
 
     if (property.type) {
         return val.__get_property__(property.value)
@@ -631,16 +647,14 @@ const run = async (ast, scope, depth_value = 0) => {
                 }
             }
         } else if (ast.lhs.type == 'property') {
-            await assign_property(ast.lhs.lhs, ast.lhs.values, ast.rhs, scope)
+            await assign_property(ast.lhs.lhs, ast.lhs.ktype, ast.lhs.values, ast.rhs, scope)
         } else {
             let place = scopes[find_variable_scope(ast.lhs, scope) ?? scope].map
-
             if (place.has(ast.lhs.value)) {
                 if (!place.get(ast.lhs.value).changeable) {
                     throwError(new WaveGrassError('TypeError', `Assignment to a constant variable '${ast.lhs.value}'`, ast.lhs.col, ast.lhs.line))
                 }
             }
-
             if (ast.rhs.type == 'operation') {
                 let value = {
                     changeable: ast.lhs.changeable ?? true,
@@ -910,7 +924,7 @@ const run = async (ast, scope, depth_value = 0) => {
                 else await run({
                     type: 'assignment',
                     lhs: ast.loopvar,
-                    rhs: { type: value.value.__type__(), value: value.index.__value_of__() }
+                    rhs: { type: 'number', value: value.index.__value_of__() }
                 }, lscope, depth_value)
 
                 for (const i of ast.block) {

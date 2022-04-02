@@ -5,7 +5,7 @@ const lex = require('./lexer')
  * @type { string }
  */
 let file = ''
-const version = 'v0.1.1-beta'
+const version = 'v0.1.2-beta'
 
 if (process.argv.length > 2) {
     if (process.argv[2].startsWith('-')) {
