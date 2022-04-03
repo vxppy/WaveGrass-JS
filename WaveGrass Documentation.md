@@ -23,16 +23,16 @@ node . filename
 # Documentation
 ## Global Inbuilt Functions
 * `print(*args, sep:"", end:"\n", colored:false)`: Prints object/objects, separated by _sep_, ending with _end_. 
-If _colored_ is set to _true_, each object printed has a different colour, determined by its type.
+If _colored_ is set to _true_, each object printed has a different colour, determined by its type
 
-* `prompt(*args)`: Returns user text input as type _string_. 
-Prompts user using argument given (type _string_).
+* `prompt(*args)`: Returns user text input as type _string_.
+Prompts user using argument given (type _string_)
 
 * `parseNum(*args)`: Converts _string_ to type _number_.
-If argument given cannot be converted into _number_, returns NaN.
+If argument given cannot be converted into _number_, returns NaN
 
 
-* `isNaN(*args)`: Checks if argument given is NaN. Returns boolean.
+* `isNaN(*args)`: Checks if argument given is NaN. Returns boolean
 
 ## Objects
 ### Types
@@ -77,9 +77,9 @@ If argument given cannot be converted into _number_, returns NaN.
 * `number.__b_and__(number2)`:
 * `number.__b_or__(number2)`:
 * `number.__b_xor__(number2)`:
-* `number.__b_l_shift__(number2)`:
-* `number.__b_r_s_shift__(number2)`:
-* `number.__b_r_us_shift__(number2)`:
+* `number.__b_l_shift__(number2)`: Shifts the binary value of `number` to the left by appending `number2` zeroes to them and returns the decimal value of the result of the operation.  **Example**: 2 in binary is 10, shifting it to the left by 1 zero would make it 100, which is 4 in decimal
+* `number.__b_r_s_shift__(number2)`: Shifts the binary value of `number` to the right by removing `number2` number of succeeding zeroes and returns the decimal value of the result of the operation.  This operation retains the sign (positive or negative) of the number. **Example**: +4 in binary is 100, shifting it to the right by 1 zero would make it 10, which is +2 in decimal
+* `number.__b_r_us_shift__(number2)`: Shifts the binary value of `number` to the right by removing `number2` number of succeeding zeroes and returns the decimal value of the result of the operation.  This operation DOES NOT retain the sign (positive or negative) of the number, the input and the output are assumed to be positive. **Example**: +4 in binary is 100, shifting it to the right by 1 zero would make it 10, which is +2 in decimal
 
 #### String
 * `string.__string__()`: Converts `string` to type `string`
@@ -92,9 +92,19 @@ If argument given cannot be converted into _number_, returns NaN.
 
 #### Arrays
 * `array.__bool__()`: Returns `false` if array is empty, else returns `true`
+* `array.__string__()`: Returns `array`, converted into type `string`
+* `array.__add__()`: 
+* `array.__r_add__()`:
+* `array.__mul__(number)`: Returns an array with `array`'s elements repeated `number` times.  `number` must be of type `number` or must be a string containing a number
+* `array.__set_property__(name, value)`: Sets the `name` index of the array to be `value` if `name` is of type `number`, else sets the `name` property of the array to be `value`
+* `array.__get_property__(name)`: Returns the value of the array at `name` index if `name` is of type `number`, else it returns the `name` property of the array
 * `array.pop()`: Removes the last element of an array
 * `array.push(*args)`: Appends the arguments to the array
 #### Boolean
+* `boolean.__string__()`: Returns `boolean`, converted into type `string`
+* `boolean.__bool__()`: Returns the value of `boolean` (`true` or `false`)
+* `boolean.__add__(val)`: If `val` is of type `number`, returns `val`.  If `val` is of type `string`, appends `val` to `boolean.__string__()` and returns
+* `boolean.__r_add__(val)`: If `val` is of type `number`, returns `val`.  If `val` is of type `string`, appends `boolean.__string__()` to `val` and returns
 
 #### Functions (type Method)
 
