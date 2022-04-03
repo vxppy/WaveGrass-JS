@@ -1,4 +1,4 @@
-# WaveGrass
+# WaveGrass v0.1.2
 An Experimental Language made in JS.
 
 ## How to run a `.wg` file
