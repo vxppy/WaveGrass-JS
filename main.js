@@ -26,7 +26,7 @@ const run = async () => {
     })
 
     if (!path) {
-        console.log('File not found. Make sure the file exists')
+        console.error('File not found. Make sure the file exists')
     } else {
         if (fs.statSync(path).isDirectory()) {
             path += '\\main.wg'
@@ -34,7 +34,7 @@ const run = async () => {
         }
 
         if (fs.existsSync(path)) await lex(fs.readFileSync(path, 'utf-8'), path)
-        else console.log('File not found. Make sure the file exists')
+        else console.error('File not found. Make sure the file exists')
     }
 }
 
