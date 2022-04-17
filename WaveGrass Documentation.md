@@ -1,4 +1,4 @@
-# WaveGrass v0.1.2
+# WaveGrass v0.1.3
 An Experimental Language made in JS.
 
 ## How to run a `.wg` file
@@ -34,11 +34,13 @@ If argument given cannot be converted into _number_, returns NaN
 
 * `isNaN(*args)`: Checks if argument given is NaN. Returns boolean
 
+* `add(a, b)`: Adds `a` and `b` and returns the sum
+
 ## Objects
 ### Types
 * _number_: Type used for numbers, including float and integers
 * _string_: Type used for strings
-* _boolean_: Type used for boolean (`true` or `false`)
+* _boolean_: Type used for boolean (`true` or `sfalse`)
 * _null_: Null type
 * _array_: Type used for arrays/lists
 * _method_: Type used for functions and methods
@@ -48,18 +50,22 @@ If argument given cannot be converted into _number_, returns NaN
 #### Object (common for all types)
 * `object.__mutable__()`: Returns `true` if the object's value can changed
 * `object.__type__()`: Returns the type of the object
-* `object.__string__()`: Converts an object to type string
-* `object.__name__()`: Returns the name of the object (`object`)
+* `object.__string__()`: Converts an object to type `string`
+* `object.__name__()`: Returns the name of the object (`object` in this case)
 * `object.__value_of__()`: Returns value of the object
+* `object.__not__()`: Returns `true` if the object is empty or equal to 0 and returns `false` for everything else, including objects of type `boolean`
+* `object.__bool__()`: Returns `false` if the object is empty or equal to  0 or if it is the boolean `false`, else returns `true`
+* `object.__equals__()`:
+* `object.__strict_equals__()`:
 
 
 #### Number
 **Note**: Here, `number` refers to a variable of type `number` and not a literal number.  `number2` can however be either a variable of type `number`, a literal number, or a string containing a number
 
-* `number.__add__(number2)`: Adds two numbers
+* `number.__add__(number2)` or `number + number2`: Adds two numbers
 * `number.__string__()`: Converts the number into type `string`
 * `number.__r_add__(number2)`: Reverse Order Addition; Alias of `number.__add__()`
-* `number.__mult__(number2)`: Multiplies two numbers
+* `number.__mult__(number2)` or `number * number2`: Multiplies two numbers
 * `number.__r_mult__(number2)`: Reverse Order Multiplication; Alias of `number.__mult__()`
 * `number.__sub__(number2)`: Subtracts `number2` from `number`
 * `number.__r_sub__(number2)`: Subtracts `number` from `number2`
@@ -73,11 +79,11 @@ If argument given cannot be converted into _number_, returns NaN
 * `number.__greater_than__(number2)`: Returns `true` if `number` is greater than `number2`
 * `number.__less_than__(number2)`: Returns `true` if `number` is lesser than `number2`
 * `number.__bool__()`: Returns `false` if `number` is 0, else returns `true`
-* `number.__b_not__(number2)`:
-* `number.__b_and__(number2)`:
-* `number.__b_or__(number2)`:
-* `number.__b_xor__(number2)`:
-* `number.__b_l_shift__(number2)`: Shifts the binary value of `number` to the left by appending `number2` zeroes to them and returns the decimal value of the result of the operation.  **Example**: 2 in binary is 10, shifting it to the left by 1 zero would make it 100, which is 4 in decimal
+* `number.__b_not__()` or `~number`: Bitwise NOT operator
+* `number.__b_and__(number2)` or `number & number2`: Bitwise AND operator
+* `number.__b_or__(number2)` or `number | number2`: Bitwise OR operator
+* `number.__b_xor__(number2)`: Bitwise exclusive OR operator
+* `number.__b_l_shift__(number2)` or `number << number2`: Shifts the binary value of `number` to the left by appending `number2` zeroes to them and returns the decimal value of the result of the operation.  **Example**: 2 in binary is 10, shifting it to the left by 1 zero would make it 100, which is 4 in decimal
 * `number.__b_r_s_shift__(number2)`: Shifts the binary value of `number` to the right by removing `number2` number of succeeding zeroes and returns the decimal value of the result of the operation.  This operation retains the sign (positive or negative) of the number. **Example**: +4 in binary is 100, shifting it to the right by 1 zero would make it 10, which is +2 in decimal
 * `number.__b_r_us_shift__(number2)`: Shifts the binary value of `number` to the right by removing `number2` number of succeeding zeroes and returns the decimal value of the result of the operation.  This operation DOES NOT retain the sign (positive or negative) of the number, the input and the output are assumed to be positive. **Example**: +4 in binary is 100, shifting it to the right by 1 zero would make it 10, which is +2 in decimal
 
@@ -107,7 +113,7 @@ If argument given cannot be converted into _number_, returns NaN
 * `boolean.__r_add__(val)`: If `val` is of type `number`, returns `val`.  If `val` is of type `string`, appends `boolean.__string__()` to `val` and returns
 
 #### Functions (type Method)
-
+* TODO
 
 ## Keywords and Examples
 * `let` keyword: Used to declare variables
@@ -149,15 +155,35 @@ ___
 
 **Syntax**:
 ```
-import "moduleName"  // Type the path of the module if it is not in the same directory
+module = import("moduleName")  // Type the path of the module if it is not in the same directory
 
-moduleName.function()  // Calling a method from the module
+module.function()  // Calling a method from the module
 
 define method(){
 return 0
 }
 
-export method  // export a method so that it can be used by other WaveGrass files
+export method as some_func  // export a method so that it can be imported by other files
+```
+___
+
+* `importJS` function: Imports from JavaScript code
+
+**Syntax**:
+
+*WaveGrass code:*
+```
+jsfile = importJS("JSFile.js")  // importing from JS
+jsfile.some_func()  // running a method from the imported file
+```
+
+*JavaScript file that is being imported:*
+```js
+const some_func = () => {
+  return 0
+}
+
+module.exports = { some_func }
 ```
 ___
 
@@ -194,16 +220,16 @@ ___
 * `if` statement: 
 
   
-  **Syntax**:
-  ```
-  if condition_1{        //curly braces compulsory
-  //do thing
-  }else if condition_2{
-  //do thing
-  }else{
-  //do thing
-  }
-  ```
+**Syntax**:
+```
+if condition_1{        //curly braces compulsory
+//do thing
+}else if condition_2{
+//do thing
+}else{
+//do thing
+}
+```
   
 ___
 * `for` loop
@@ -307,8 +333,8 @@ continue // Since the loop goes to the next iteration here, do-more-things is no
 * `number++`: Incrementing a number by 1
 * `number--`: Decrementing a number by 1
 * `object1 -> object2`: `object1` referencing `object2`
-* `||`: "or"
-* `&&`: "and"
+* `||`: Logical OR
+* `&&`: Logical AND
 * `!=`: "not equal to"
 * `==`: "is equal to"
 * `&=`: "and also equal to"
