@@ -4,6 +4,9 @@
  * @typedef { { type: string, value?: Token[] | AST[], lhs?: Token, rhs?: Token[], function?: WaveGrassFunction, condition?: Token[], body?: AST[] } } AST
  */
 
+const throwError = require("./errors")
+const { WaveGrassError } = require("./wavegrassObject")
+
 const prec = {
     '.': 0,
     'call': 0,
@@ -153,7 +156,7 @@ class Parser {
     /**
      * 
      * @param { Token } till 
-     * @returns { Token[] }
+     * @returns { Promise<Token[]> }
      */
     async collectTokens(till) {
         let tokens = []
@@ -173,8 +176,7 @@ class Parser {
         } else {
             while (token.type != till.type) {
                 tokens.push(token)
-                token = await this._lexer.requestNextToken()
-    
+                token = await this._lexer.requestNextToken()    
                 if(!token) {
                     end = false
                     token = { type: 'delim' }
@@ -252,39 +254,105 @@ class Parser {
                 return prev
             } else {
                 curr = this._lastToken
+                this._lastToken = null
             }
         } else {
             curr = await this._lexer.requestNextToken()
         }
 
         if (curr.type == 'delim') {
-            if(this._lastDelim) return await this.parseNext()
+            if(this._lastDelim) return await this.parseNext(prev)
+            let nzt = await this._lexer.requestNextToken()
+            if(prev && prev.type == 'if' && nzt.type == 'keyword' && nzt.value == 'else') {
+                return await this.parseNext(prev)
+            } else {
+                this._lastToken = nzt
+            }
             return prev
         }
 
         if (VALUES.includes(curr.type)) {
-            return this.parseNext(curr)
+            curr.const = false
+            if(prev) {
+                if(prev.type == 'keyword') {
+                    if(prev.value == 'let') {
+                        curr.const = false
+                    } else if(prev.value == 'const'){
+                        curr.const = true
+                    } else throwError(new WaveGrassError())
+
+                    curr.def = true
+                    return await this.parseNext(curr)
+                } else {
+                    throwError(new WaveGrassError())
+                }
+            } else return await this.parseNext(curr)
         }
 
         if (curr.type == 'assignment') {
             if (!prev) {
                 throw Error()
             } else {
-                return this.parseNext({ type: 'assignment', lhs: prev, rhs: toPostFix(await this.collectTokens({ type: 'delim' })) })
+                if(curr.value) {
+                    return await this.parseNext({ type: 'assignment', lhs: prev, rhs: [prev, ...toPostFix(await this.collectTokens({ type: 'delim' })), { type: 'operator', value: curr.value }] })
+                }
+
+                return await this.parseNext({ type: 'assignment', lhs: prev, rhs: toPostFix(await this.collectTokens({ type: 'delim' })) })
             }
         }
 
         if (curr.type == 'keyword') {
+            if(curr.value == 'let' || curr.value == 'const') {
+                return await this.parseNext(curr)
+            }
+
             if(curr.value == 'if') {
                 let condition = toPostFix(await this.collectTokens({ type: 'symbol', value: '{'}))
                 this._lastToken = null
-                let body = await this.parseStatements(await this.collectTokens({ type: 'symbol', value: '}'}))
+                let body = []
+
+                let tokens = await this.collectTokens({ type: 'symbol', value: '}'})
+                if(tokens.length) body = await this.parseStatements(tokens)
+
+                if(this._lastToken) this._lastToken = null
 
                 return this.parseNext({ type: 'if', condition: condition, body: body })
             }
+            if(curr.value == 'else') {
+                if(!prev || prev.type != 'if') throw Error()
+                let next = await this._lexer.requestNextToken()
+
+                if(next.type == 'keyword') {
+                    this._lastToken = next;
+                    let nxt = await this.parseNext()
+                    prev.elsebody = [nxt]
+                    return await this.parseNext(prev)
+                }
+
+                let tokens = await this.collectTokens({ type: 'symbol', value: '}'})
+
+                let elsebody = []
+                if(tokens.length) elsebody = await this.parseStatements(tokens)
+                if(this._lastToken) this._lastToken = null
+
+                prev.elsebody = elsebody
+                return await this.parseNext(prev)
+            }
+
+            if(curr.value == 'while') {
+                let condition = toPostFix(await this.collectTokens({ type: 'symbol', value: '{'}))
+                this._lastToken = null
+                let body = []
+                let tokens = await this.collectTokens({ type: 'symbol', value: '}'})
+
+                if(tokens.length) body = await this.parseStatements(tokens)
+                if(this._lastToken) this._lastToken = null
+
+                return this.parseNext({ type: 'while', condition: condition, body: body })
+            }
         }
         
-        if (curr.type == 'symbol') {
+        if (curr.type == 'symbol' || curr.type == 'operator') {
             if (prev) {
                 return this.parseNext({ type: 'expr', value: toPostFix([prev, curr, ...await this.collectTokens({ type: 'delim' })]) })
             } else {
@@ -293,6 +361,7 @@ class Parser {
         }
 
         if(curr.type == 'EOF') {
+            if(prev) { return prev }
             return { type: 'end' }
         }
     }

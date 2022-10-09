@@ -1,5 +1,5 @@
-const { input } = require("./modules/input")
-const { createObject, WaveGrassFunction, WaveGrassNumber, WaveGrassString, WaveGrassError, WaveGrassNull, WaveGrassObject } = require("./wavegrassObject")
+const throwError = require("./errors")
+const { createObject, WaveGrassFunction, WaveGrassNumber, WaveGrassString, WaveGrassError, WaveGrassNull, WaveGrassObject, _console } = require("./wavegrassObject")
 const { wrap } = require("./wrap")
 
 /**
@@ -7,14 +7,6 @@ const { wrap } = require("./wrap")
  * @typedef { { type: string, value: string } } Operator
  * @typedef { { type: string, value?: Token[] | AST[], lhs?: Token, rhs?: Token[], function?: WaveGrassFunction, condition?: Token[], body?: AST[] } } AST
  */
-
-const log = (args) => {
-    process.stdout.write(`${args.positional.map(i => i.__string__()).join(args.key.sep?.__value_of__() ?? ' ')}${args.key.end?.__value_of__() ?? '\n'}`)
-}
-
-const _input = async (args) => {
-    return new WaveGrassString(await input(args.positional[0].__value_of__(), args.key.encoding?.__value_of__() ?? 'utf-8'))
-}
 
 const unary = ['!', '_+', '__+', '_-', '__-', '~']
 
@@ -24,17 +16,14 @@ class Environment {
      */
     _stack = ['global']
     /**
-     * @type { { [scope: string]: { [variable: string]: { ref: boolean, value: string | WaveGrassObject } } } }
+     * @type { { [scope: string]: { [variable: string]: { ref: boolean, value: string | WaveGrassObject, const: boolean } } } }
      */
     _scopes = {
         'global': {
-            log: {
-                ref: false,
-                value: new WaveGrassFunction('log', ['*', 'sep', 'end'], [], 'global', true, null, true, log)
-            },
-            input: {
-                ref: false,
-                value: new WaveGrassFunction('input', ['message'], [], 'global', true, null, true, _input)
+            console: {
+                ref: false, 
+                value: _console, 
+                const: false
             }
         }
     }
@@ -323,11 +312,21 @@ class Environment {
         if (ast.type == 'expr') {
             return await this.operate(ast.value)
         } else if (ast.type == 'assignment') {
-            let scope = this.getScope(ast.lhs.value)
+            let v = this.getVariable(ast.lhs.value)
+            if(v) {
+                if(ast.lhs.def) throwError(new WaveGrassError())
 
-            this._scopes[scope][ast.lhs.value] = {
-                ref: false,
-                value: await this.operate(ast.rhs)
+                if(v.const) {
+                    throwError(new WaveGrassError())
+                } else {                    
+                    v.value = await this.operate(ast.rhs)
+                }
+            } else {
+                let scope = this.getScope(ast.lhs.value)
+                this._scopes[scope][ast.lhs.value] = {
+                    value: await this.operate(ast.rhs),
+                    const: ast.lhs.const
+                }
             }
         } else if (ast.type == 'call') {
             let func = ast.function;
@@ -342,18 +341,35 @@ class Environment {
                 }
             }
         } else if (ast.type == 'if') {
-            if ((await this.operate(ast.condition)).__bool__().__value_of__()) {
-                let scope = `if${this._stack.length}`
-                this._stack.push(scope)
-                this._scopes[scope] = {}
+            let scope = `if${this._stack.length}`
+            this._stack.push(scope)
+            this._scopes[scope] = {}
 
+            if ((await this.operate(ast.condition)).__bool__().__value_of__()) {
                 for (let i = 0; i < ast.body.length; i++) {
                     await this.execute(ast.body[i])
                 }
-
-                this._scopes[scope] = null
-                this._stack.pop()
+            } else {
+                for (let i = 0; i < ast.elsebody.length; i++) {
+                    await this.execute(ast.elsebody[i])
+                }
             }
+            
+            this._scopes[scope] = null
+            this._stack.pop()
+        } else if (ast.type == 'while') {
+            let scope = `while${this._stack.length}`
+            this._stack.push(scope)
+            this._scopes[scope] = {}
+
+            while ((await this.operate(ast.condition)).__bool__().__value_of__()) {
+                for (let i = 0; i < ast.body.length; i++) {
+                    await this.execute(ast.body[i])
+                }
+            }
+            
+            this._scopes[scope] = null
+            this._stack.pop()
         }
     }
 

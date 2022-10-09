@@ -8,6 +8,9 @@ const fs = require('fs')
 const createReadStream = (path, encoding = 'utf-8') => {
     const stream = fs.createReadStream(path, { encoding: encoding })
 
+    process.once('SIGINT', (e) => {
+        stream.close()
+    })
     return {
         read: async (size) => {
             return new Promise(res => {
