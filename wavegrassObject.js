@@ -1,3 +1,5 @@
+const { input } = require("./modules/input")
+
 let globalDepth = 3
 
 class WaveGrassObject {
@@ -734,8 +736,7 @@ class WaveGrassBoolean extends WaveGrassObject {
 
 class WaveGrassError extends WaveGrassObject {
     static trace = []
-    static file = ''
-    static lines = []
+    static fileStack = []
 
     constructor(title, message, col, line) {
         super(message)
@@ -823,6 +824,24 @@ class WaveGrassModule extends WaveGrassObject {
 // _JSON.__set_property__('toStr', new WaveGrassFunction('toStr', ['obj', 'indent', 'replace'], '<internal_JSON_str>', 'global', true))
 
 
+const log = (args) => {
+    process.stdout.write(`${args.positional.map(i => i.__string__()).join(args.key.sep?.__value_of__() ?? ' ')}${args.key.end?.__value_of__() ?? '\n'}`)
+}
+
+const _input = async (args) => {
+    return new WaveGrassString(await input(args.positional[0].__value_of__(), args.key.encoding?.__value_of__() ?? 'utf-8'))
+}
+
+const err = (args) => {
+    process.stderr.write(`\x1b[31m${args.positional.map(i => i.__string__()).join(args.key.sep?.__value_of__() ?? ' ')}${args.key.end?.__value_of__() ?? '\n'}\x1b[0m`)
+}
+
+const _console = new WaveGrassObject()
+_console.__properties['write'] = new WaveGrassFunction('log', ['*', 'sep', 'end'], [], 'global', true, null, true, log)
+_console.__properties['read'] = new WaveGrassFunction('input', ['message'], [], 'global', true, null, true, _input)
+_console.__properties['error'] = new WaveGrassFunction('error', ['*', 'sep', 'end'], [], 'global', true, null, true, err)
+
+
 const getClassFromType = (obj) => {
     if (obj == 'number') return WaveGrassNumber
     else if (obj == 'string') return WaveGrassString
@@ -831,6 +850,7 @@ const getClassFromType = (obj) => {
     else if (obj == 'boolean') return WaveGrassBoolean
     return WaveGrassNull
 }
+
 const createObject = (type, ...extra) => {
     if (['number', 'string', 'method', 'array', 'boolean', 'null'].includes(type)) {
         let obj = new (getClassFromType(type))(...extra)
@@ -842,7 +862,7 @@ module.exports = {
     WaveGrassObject, WaveGrassNumber, WaveGrassString,
     WaveGrassArray, WaveGrassBoolean, WaveGrassError,
     WaveGrassFunction, WaveGrassNull, WaveGrassModule,
-    createObject
+    createObject, _console
     //print, prompt, 
     //parseNum, _isNaN, _import, _importJS, _JSON
 }

@@ -1,4 +1,6 @@
+const throwError = require('./errors')
 const createReadStream = require('./syncReadable')
+const { WaveGrassError } = require('./wavegrassObject')
 
 const MAX_READ_SIZE = 1024
 const KEYWORDS = ['let', 'const', 'if', 'else', 'for', 'while', 'do', 'define', 'break', 'hoist']
@@ -23,6 +25,11 @@ class Lexer {
     _lastchar = null
 
     _buffering = false
+
+    _delim_sent = false
+
+    _col = 0
+    _line = 1
 
     /**
      * 
@@ -70,36 +77,50 @@ class Lexer {
                 return { type: 'delim' }
             }
         }
+        
         if (currCode == 10) {
+            this._col = 0
+            this._line++
             this._readpos++
-            if (!this._buffering || this._readpos == this._buffer.length) return { type: 'delim' }
-            else return await this.requestNextToken();
+            if ((!this._buffering || this._readpos == this._buffer.length) && !this._delim_sent) {
+                this._delim_sent = true
+                return { type: 'delim' }
+            }
+            return await this.requestNextToken();
         }
-        if (currCode > 48 && currCode < 58) {
-            return { type: 'number', value: await this._parseNum() }
+
+        this._delim_sent = false
+
+        if (currCode > 47 && currCode < 58) {
+            let cl = this._col
+            return { type: 'number', value: await this._parseNum(), line: this._line, col: cl }
         } if (currCode == 34 || currCode == 39) {
-            return { type: 'string', value: await this._parseString() }
+            let cl = this._col
+            let line = this._line
+            return { type: 'string', value: await this._parseString(), line: line, col: cl }
         } if ((currCode > 64 && currCode < 91) || (currCode > 96 && currCode < 123) || currCode == 95) {
+            let cl = this._col
             let val = await this._parseName()
             if (KEYWORDS.includes(val)) {
-                this._buffering = true
-                return { type: 'keyword', value: val }
+                if(val != 'let' && val != 'const') this._buffering = true
+                return { type: 'keyword', value: val, line: this._line, col: cl }
             }
-            return { type: BOOLEANS.includes(val) ? 'boolean' : 'variable', value: val }
+            return { type: BOOLEANS.includes(val) ? 'boolean' : 'variable', value: val, line: this._line, col: cl }
         } if (currCode == 61) {
             this._readpos++
 
             if (this._readpos == this._buffer.length) {
                 await this._fillBuffer()
-                if (!this._buffer) return { type: 'assignment' }
+                if (!this._buffer) return { type: 'assignment', line: this._line, col: this._col }
             } 
 
             if(this._buffer[this._readpos] == '=') {
                 this._readpos++
-                return { type: 'operator', value: '==' }
+                return { type: 'operator', value: '==', line: this._line, col: this._col }
             }
 
-            return { type: 'assignment' }
+            this._col++
+            return { type: 'assignment', line: this._line, col: this._col }
         }
 
         let curr = this._buffer[this._readpos]
@@ -110,59 +131,74 @@ class Lexer {
             if (this._readpos == this._buffer.length) {
                 await this._fillBuffer()
 
-                if (!this._buffer) return { type: 'operator', value: curr }
+                if (!this._buffer) return { type: 'operator', value: curr, line: this._line, col: this._col }
             }
 
             if (this._buffer[this._readpos] == curr) {
                 this._readpos++
-                return { type: 'operator', value: `${curr}${curr}` }
+                return { type: 'operator', value: `${curr}${curr}`, line: this._line, col: this._col }
             }
 
             if (this._buffer[this._readpos] == '=') {
                 this._readpos++
-                return { type: 'operator', value: `${curr}=` }
+                return { type: 'assignment', value: curr, line: this._line, col: this._col }
             }
 
-            return { type: 'operator', value: curr }
+            return { type: 'operator', value: curr, line: this._line, col: this._col }
+        }
+
+        if ('<>!^'.includes(curr)) {
+            this._readpos++
+
+            if (this._readpos == this._buffer.length) {
+                await this._fillBuffer()
+
+                if (!this._buffer) return { type: 'operator', value: curr, line: this._line, col: this._col }
+            }
+
+            if (this._buffer[this._readpos] == '=') {
+                this._readpos++
+                return { type: 'assigmnet', value: curr, line: this._line, col: this._col }
+            }
+
+            return { type: 'operator', value: curr, line: this._line, col: this._col }
         }
 
         if (curr == ':') {
             this._readpos++
-            return { type: 'operator', value: ':' }
+            return { type: 'operator', value: ':', line: this._line, col: this._col }
         }
 
         if (curr == '.') {
             this._readpos++
             if (this._readpos == this._buffer.length) {
                 await this._fillBuffer()
-                if (!this._buffer) return { type: 'operator', value: curr }
+                if (!this._buffer) return { type: 'operator', value: curr, line: this._line, col: this._col }
             }
 
             if (this._buffer[this._readpos] == curr) {
                 this._readpos++
                 if (this._readpos == this._buffer.length) {
                     await this._fillBuffer()
-
-                    if (!this._buffer) throw Error()
+                    if (!this._buffer) throwError(new WaveGrassError('Syntax Error', 'Unpexpected token `.`', this._col, this._line))
                 }
 
                 if (this._buffer[this._readpos] == curr) {
                     this._readpos++
-
-                    return { type: 'operator', value: '...' }
+                    return { type: 'operator', value: '...', line: this._line, col: this._col }
                 }
-
-                throw Error()
+                throwError(new WaveGrassError('Syntax Error', 'Unpexpected token `.`', this._col, this._line))
             }
-            return { type: 'operator', value: curr }
+            return { type: 'operator', value: curr, line: this._line, col: this._col }
         } else if (curr == '{') {
             this._readpos++
             if (this._buffering) {
                 this._buffering = false
             }
 
-            return { type: 'symbol', value: curr }
+            return { type: 'symbol', value: curr, line: this._line, col: this._col }
         }
+
         return { type: 'symbol', value: this._buffer[this._readpos++] }
     }
 
@@ -183,7 +219,9 @@ class Lexer {
             if (this._readpos == this._buffer.length) {
                 await this._fillBuffer()
             }
+
             if (!this._buffer) break;
+            this._col++
             currCode = this._buffer.charCodeAt(this._readpos)
         }
 
@@ -200,11 +238,16 @@ class Lexer {
             }
 
             if (!this._buffer) {
-                throw new Error('oops')
+                throwError(new WaveGrassError('Syntax Error', 'Unexpected EOF while reading string', this._col, this._line))
             }
 
-            str.push(this._buffer[this._readpos])
-            this._readpos++
+            this._col++
+
+            if(this._buffer[this._readpos] == '\n') {
+                this._col = 0
+                this._line++
+            }
+            str.push(this._buffer[this._readpos++])
         }
 
         this._readpos++
@@ -225,6 +268,7 @@ class Lexer {
             }
 
             if (!this._buffer) break;
+            this._col++
             currCode = this._buffer.charCodeAt(this._readpos)
         }
 
