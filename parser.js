@@ -46,8 +46,8 @@ const toPostFix = (tokens) => {
         if (VALUES.includes(tokens[i].type)) {
             value.push(tokens[i])
         } else if (tokens[i].type == 'operator') {
-            if(tokens[i].value == ':') {
-                if(value.find(i => i.value == ':' && i.type == 'operator') || opp.find(i => i.value == ':' && i.type == 'operator')) throw Error()
+            if (tokens[i].value == ':') {
+                if (value.find(i => i.value == ':' && i.type == 'operator') || opp.find(i => i.value == ':' && i.type == 'operator')) throw Error()
             }
 
             while (opp[opp.length - 1] && prec[opp[opp.length - 1].value] <= prec[tokens[i].value]) {
@@ -59,6 +59,7 @@ const toPostFix = (tokens) => {
                 if (tokens[i - 1] && VALUES.includes(tokens[i - 1].type)) {
                     let stk = []
                     let val = []
+                    let col = tokens[i].col, line = tokens[i].line;
                     for (let j = i + 1; j < tokens.length; j++) {
                         if (tokens[j].type == 'symbol') {
                             if (tokens[j].value == '(') {
@@ -79,8 +80,23 @@ const toPostFix = (tokens) => {
                     while (opp[opp.length - 1] && prec[opp[opp.length - 1].value] <= prec['call']) {
                         value.push(opp.pop())
                     }
-                    opp.push({ type: 'operator', value: 'call', args: parseParams(val) })
+                    opp.push({ type: 'operator', value: 'call', args: parseParams(val), line: line, col: col })
                 } else opp.push(tokens[i])
+            } else if (tokens[i].value == '[') {
+                if (!value[value.length - 1] || value[value.length - 1].type != 'variable') {
+                    let stk = []
+                    let val = []
+                    let col = tokens[i].col, line = tokens[i].line;
+                    for (let j = i + 1; j < tokens.length; j++) {
+                        if (tokens[j].value == ']') {
+                            i = j
+                            break;
+                        }
+                        val.push(tokens[j])
+                    }
+
+                    opp.push({ type: 'array', value: parseArray(val), line: line, col: col })
+                }
             }
             if (tokens[i].value == ')') {
                 while (opp.length && (opp[opp.length - 1].value != '(' && opp[opp.length - 1].type != 'symbol')) {
@@ -88,7 +104,7 @@ const toPostFix = (tokens) => {
                 }
                 opp.pop()
             }
-        } 
+        }
     }
 
     while (opp.length) {
@@ -146,6 +162,39 @@ const parseParams = (tokens) => {
     return args
 }
 
+/**
+ * 
+ * @param { Token[] } tokens 
+ * @returns { Token[][] }
+ */
+
+const parseArray = (tokens) => {
+    let stk = []
+    let values = []
+    let temp = []
+    for (let i = 0; i < tokens.length; i++) {
+        if (tokens[i].type == 'symbol') {
+            if (tokens[i].value == '(') stk.push(tokens[i])
+            else if (tokens[i].value == ')') {
+                if (!stk.length) throw Error
+                else stk.pop()
+            } else if (tokens[i].value == ',') {
+                if (!stk.length) {
+                    i++
+                    values.push(toPostFix(temp))
+                    temp = []
+                }
+            }
+        }
+        temp.push(tokens[i])
+    }
+
+    if (temp.length) {
+        values.push(toPostFix(temp))
+    }
+    return values
+}
+
 class Parser {
     _lexer
     _lastToken
@@ -164,11 +213,11 @@ class Parser {
 
         let end = true
 
-        if(till.value) {
+        if (till.value) {
             while (!(token.type == till.type && token.value == till.value)) {
                 tokens.push(token)
-                token = await this._lexer.requestNextToken()  
-                if(token.type == 'EOF') {
+                token = await this._lexer.requestNextToken()
+                if (token.type == 'EOF') {
                     end = false
                     break
                 }
@@ -176,8 +225,8 @@ class Parser {
         } else {
             while (token.type != till.type) {
                 tokens.push(token)
-                token = await this._lexer.requestNextToken()    
-                if(!token) {
+                token = await this._lexer.requestNextToken()
+                if (!token) {
                     end = false
                     token = { type: 'delim' }
                     break
@@ -185,7 +234,7 @@ class Parser {
             }
         }
 
-        if(!end) throw Error()
+        if (!end) throw Error()
 
         this._lastToken = token
         return this.removeExtraDelims(tokens)
@@ -201,16 +250,16 @@ class Parser {
         let delim = false
         let start = false
 
-        for(let i = 0; i < tokens.length; i++) {
-            if(tokens[i].type == 'delim') {
-                if(start && !delim) {
+        for (let i = 0; i < tokens.length; i++) {
+            if (tokens[i].type == 'delim') {
+                if (start && !delim) {
                     arr.push(tokens[i])
-                    delim = true 
+                    delim = true
                 }
             } else {
-                if(!start) start = true
+                if (!start) start = true
                 arr.push(tokens[i])
-                if(delim) delim = false
+                if (delim) delim = false
             }
         }
 
@@ -228,7 +277,7 @@ class Parser {
 
         let tree = await this.parseNext();
         let asts = []
-        while(tree) {
+        while (tree) {
             asts.push(tree)
             tree = await this.parseNext()
         }
@@ -261,9 +310,9 @@ class Parser {
         }
 
         if (curr.type == 'delim') {
-            if(this._lastDelim) return await this.parseNext(prev)
+            if (this._lastDelim) return await this.parseNext(prev)
             let nzt = await this._lexer.requestNextToken()
-            if(prev && prev.type == 'if' && nzt.type == 'keyword' && nzt.value == 'else') {
+            if (prev && prev.type == 'if' && nzt.type == 'keyword' && nzt.value == 'else') {
                 return await this.parseNext(prev)
             } else {
                 this._lastToken = nzt
@@ -273,12 +322,14 @@ class Parser {
 
         if (VALUES.includes(curr.type)) {
             curr.const = false
-            if(prev) {
-                if(prev.type == 'keyword') {
-                    if(prev.value == 'let') {
+            if (prev) {
+                if (prev.type == 'keyword') {
+                    if (prev.value == 'let') {
                         curr.const = false
-                    } else if(prev.value == 'const'){
+                    } else if (prev.value == 'const') {
                         curr.const = true
+                    } else if (prev.value == 'define') {
+                        return curr
                     } else throwError(new WaveGrassError())
 
                     curr.def = true
@@ -293,7 +344,7 @@ class Parser {
             if (!prev) {
                 throw Error()
             } else {
-                if(curr.value) {
+                if (curr.value) {
                     return await this.parseNext({ type: 'assignment', lhs: prev, rhs: [prev, ...toPostFix(await this.collectTokens({ type: 'delim' })), { type: 'operator', value: curr.value }] })
                 }
 
@@ -302,56 +353,74 @@ class Parser {
         }
 
         if (curr.type == 'keyword') {
-            if(curr.value == 'let' || curr.value == 'const') {
+            if (curr.value == 'let' || curr.value == 'const') {
                 return await this.parseNext(curr)
             }
 
-            if(curr.value == 'if') {
-                let condition = toPostFix(await this.collectTokens({ type: 'symbol', value: '{'}))
+            if (curr.value == 'if') {
+                let condition = toPostFix(await this.collectTokens({ type: 'symbol', value: '{' }))
                 this._lastToken = null
                 let body = []
 
-                let tokens = await this.collectTokens({ type: 'symbol', value: '}'})
-                if(tokens.length) body = await this.parseStatements(tokens)
+                let tokens = await this.collectTokens({ type: 'symbol', value: '}' })
+                if (tokens.length) body = await this.parseStatements(tokens)
 
-                if(this._lastToken) this._lastToken = null
+                if (this._lastToken) this._lastToken = null
 
                 return this.parseNext({ type: 'if', condition: condition, body: body })
             }
-            if(curr.value == 'else') {
-                if(!prev || prev.type != 'if') throw Error()
+            if (curr.value == 'else') {
+                if (!prev || prev.type != 'if') throw Error()
                 let next = await this._lexer.requestNextToken()
 
-                if(next.type == 'keyword') {
+                if (next.type == 'keyword') {
                     this._lastToken = next;
                     let nxt = await this.parseNext()
                     prev.elsebody = [nxt]
                     return await this.parseNext(prev)
                 }
 
-                let tokens = await this.collectTokens({ type: 'symbol', value: '}'})
+                let tokens = await this.collectTokens({ type: 'symbol', value: '}' })
 
                 let elsebody = []
-                if(tokens.length) elsebody = await this.parseStatements(tokens)
-                if(this._lastToken) this._lastToken = null
+                if (tokens.length) elsebody = await this.parseStatements(tokens)
+                if (this._lastToken) this._lastToken = null
 
                 prev.elsebody = elsebody
                 return await this.parseNext(prev)
             }
 
-            if(curr.value == 'while') {
-                let condition = toPostFix(await this.collectTokens({ type: 'symbol', value: '{'}))
+            if (curr.value == 'while') {
+                let condition = toPostFix(await this.collectTokens({ type: 'symbol', value: '{' }))
                 this._lastToken = null
                 let body = []
-                let tokens = await this.collectTokens({ type: 'symbol', value: '}'})
+                let tokens = await this.collectTokens({ type: 'symbol', value: '}' })
 
-                if(tokens.length) body = await this.parseStatements(tokens)
-                if(this._lastToken) this._lastToken = null
+                if (tokens.length) body = await this.parseStatements(tokens)
+                if (this._lastToken) this._lastToken = null
 
                 return this.parseNext({ type: 'while', condition: condition, body: body })
             }
+
+            if (curr.value == 'define') {
+                let name = await this.parseNext(curr)
+
+                let params = parseParams(await this.collectTokens({ type: 'symbol', value: '{' }))
+
+                if (params.length) params = params[0]
+
+                this._lastToken = null
+                let body = []
+
+                let tokens = await this.collectTokens({ type: 'symbol', value: '}' })
+                if (tokens.length) body = await this.parseStatements(tokens)
+
+                if (this._lastToken) this._lastToken = null
+
+                return this.parseNext({ type: 'definition', name: name, params: params, body: body })
+            }
         }
-        
+
         if (curr.type == 'symbol' || curr.type == 'operator') {
             if (prev) {
                 return this.parseNext({ type: 'expr', value: toPostFix([prev, curr, ...await this.collectTokens({ type: 'delim' })]) })
@@ -360,8 +429,8 @@ class Parser {
             }
         }
 
-        if(curr.type == 'EOF') {
-            if(prev) { return prev }
+        if (curr.type == 'EOF') {
+            if (prev) { return prev }
             return { type: 'end' }
         }
     }

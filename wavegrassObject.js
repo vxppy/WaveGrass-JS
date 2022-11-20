@@ -486,12 +486,12 @@ class WaveGrassString extends WaveGrassObject {
 }
 
 class WaveGrassArray extends WaveGrassObject {
-    constructor(values, length) {
+    constructor(values) {
         super(values)
 
         this.__type = 'array'
         this.__mutable = true
-        this.length = new WaveGrassNumber(length)
+        this.length = new WaveGrassNumber(values.length)
     }
 
     __bool__ = () => {
@@ -824,8 +824,8 @@ class WaveGrassModule extends WaveGrassObject {
 // _JSON.__set_property__('toStr', new WaveGrassFunction('toStr', ['obj', 'indent', 'replace'], '<internal_JSON_str>', 'global', true))
 
 
-const log = (args) => {
-    process.stdout.write(`${args.positional.map(i => i.__string__()).join(args.key.sep?.__value_of__() ?? ' ')}${args.key.end?.__value_of__() ?? '\n'}`)
+const log = (args, colored) => {
+    process.stdout.write(`${args.positional.map(i => i.__string__(args.key.color?.__value_of__())).join(args.key.sep?.__value_of__() ?? ' ')}${args.key.end?.__value_of__() ?? '\n'}`)
 }
 
 const _input = async (args) => {

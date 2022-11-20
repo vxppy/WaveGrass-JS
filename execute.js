@@ -21,8 +21,8 @@ class Environment {
     _scopes = {
         'global': {
             console: {
-                ref: false, 
-                value: _console, 
+                ref: false,
+                value: _console,
                 const: false
             }
         }
@@ -252,11 +252,12 @@ class Environment {
      */
     async operate(tokens) {
         let value = []
+        let varstack;
         for (let i = 0; i < tokens.length; i++) {
             if (tokens[i].type == 'operator') {
                 if (tokens[i].value == 'call') {
                     let v = value.pop()
-                    if (v.__type != 'method') throw Error()
+                    if (v.__type != 'method') throwError(new WaveGrassError('TypeError', `\`${varstack.value}\` is not a function`, varstack.col, varstack.line))
                     if (v.__native) {
                         value.push(await v.__native_function(await this.parseArgs(tokens[i].args)))
                     } else value.push(await this.execute({ type: 'call', function: v, args: await this.parseArgs(tokens[i].args) }))
@@ -270,14 +271,20 @@ class Environment {
                     if (!(tokens[tokens.length - 1].type == 'operator' && tokens[tokens.length - 1].value == ':' && i != tokens.length - 1)) {
                         let v = this.getVariable(tokens[i].value)
                         if (!v) {
-                            throw Error()
+                            throwError(new WaveGrassError('Reference Error', `'${tokens[i].value}' is not defined`, tokens[i].col, tokens[i].line))
                         }
                         value.push(v.value)
                     }
                 } else {
                     value.push(tokens[i])
                 }
+                varstack = tokens[i]
             } else {
+                if (tokens[i].type == 'array') {
+                    for (let j = 0; j < tokens[i].value.length; j++) {
+                        tokens[i].value[j] = await this.operate(tokens[i].value[j])
+                    }
+                }
                 value.push(createObject(tokens[i].type, tokens[i].value))
             }
         }
@@ -313,12 +320,12 @@ class Environment {
             return await this.operate(ast.value)
         } else if (ast.type == 'assignment') {
             let v = this.getVariable(ast.lhs.value)
-            if(v) {
-                if(ast.lhs.def) throwError(new WaveGrassError())
+            if (v) {
+                if (ast.lhs.def) throwError(new WaveGrassError())
 
-                if(v.const) {
+                if (v.const) {
                     throwError(new WaveGrassError())
-                } else {                    
+                } else {
                     v.value = await this.operate(ast.rhs)
                 }
             } else {
@@ -339,6 +346,37 @@ class Environment {
                         return func.__string__()
                     }
                 }
+            } else {
+                let scope = `${func.__name}${this._stack.length}`
+                this._stack.push(scope)
+                this._scopes[scope] = {}
+
+                for (let i = 0; i < func.__args.length; i++) {
+                    this._scopes[scope][func.__args[i].value] = {
+                        value: ast.args.positional[i] ?? new WaveGrassNull(),
+                        const: false
+                    }
+                }
+
+                for (let i in ast.args.key) {
+                    if (func.__args.find(j => j.value == i)) {
+                        this._scopes[scope][i] = {
+                            value: ast.args.key[i],
+                            const: false
+                        }
+                    }
+                }
+
+                let statements = func.__get_statements__()
+
+                for (let i = 0; i < statements.length; i++) {
+                    await this.execute(statements[i])
+                }
+
+                this._scopes[scope] = null
+                this._stack.pop()
+
+                return new WaveGrassNull()
             }
         } else if (ast.type == 'if') {
             let scope = `if${this._stack.length}`
@@ -350,11 +388,13 @@ class Environment {
                     await this.execute(ast.body[i])
                 }
             } else {
-                for (let i = 0; i < ast.elsebody.length; i++) {
-                    await this.execute(ast.elsebody[i])
+                if (ast.elsebody) {
+                    for (let i = 0; i < ast.elsebody.length; i++) {
+                        await this.execute(ast.elsebody[i])
+                    }
                 }
             }
-            
+
             this._scopes[scope] = null
             this._stack.pop()
         } else if (ast.type == 'while') {
@@ -367,9 +407,27 @@ class Environment {
                     await this.execute(ast.body[i])
                 }
             }
-            
+
             this._scopes[scope] = null
             this._stack.pop()
+        } else if (ast.type == 'definition') {
+            let func = new WaveGrassFunction(ast.name.value, ast.params, ast.body, this._stack[this._stack.length - 1], false, null, false, null)
+            let v = this.getVariable(ast.name.value)
+            if (v) {
+                if (ast.lhs.def) throwError(new WaveGrassError())
+
+                if (v.const) {
+                    throwError(new WaveGrassError())
+                } else {
+                    v.value = func
+                }
+            } else {
+                let scope = this.getScope(ast.name.value)
+                this._scopes[scope][ast.name.value] = {
+                    value: func,
+                    const: false
+                }
+            }
         }
     }
 

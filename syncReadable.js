@@ -10,6 +10,7 @@ const createReadStream = (path, encoding = 'utf-8') => {
 
     process.once('SIGINT', (e) => {
         stream.close()
+        process.exit(1)
     })
     return {
         read: async (size) => {
