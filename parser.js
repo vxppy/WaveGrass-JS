@@ -9,6 +9,8 @@ const { WaveGrassError } = require("./wavegrassObject")
 
 const prec = {
     '.': 0,
+    '.+': 0,
+    '[]': 0,
     'call': 0,
     '**': 1,
     '*': 2,
@@ -31,7 +33,13 @@ const prec = {
     ':': 7
 }
 
-const VALUES = ['variable', 'number', 'string', 'boolean', 'call']
+const bracketPairs = {
+    '(': ')',
+    '[': ']',
+    '{': '}'
+}
+
+const VALUES = ['variable', 'number', 'string', 'boolean', 'call', 'array']
 
 /**
  * 
@@ -56,21 +64,24 @@ const toPostFix = (tokens) => {
             opp.push(tokens[i])
         } else if (tokens[i].type == 'symbol') {
             if (tokens[i].value == '(') {
-                if (tokens[i - 1] && VALUES.includes(tokens[i - 1].type)) {
-                    let stk = []
+                if (value[value.length - 1] && VALUES.includes(value[value.length - 1].type)) {
+                    let stk = [')']
                     let val = []
                     let col = tokens[i].col, line = tokens[i].line;
+
                     for (let j = i + 1; j < tokens.length; j++) {
                         if (tokens[j].type == 'symbol') {
-                            if (tokens[j].value == '(') {
-                                stk.push('(')
-                            } else if (tokens[j].value == ')') {
+                            if (tokens[j].value == '(' || tokens[j].value == '[' || tokens[j].value == '{') {
+                                stk.push(bracketPairs[tokens[j].value])
+                            } else if (tokens[j].value == ')' || tokens[j].value == ']' || tokens[j].value == '}') {
+                                if (!stk.length) throwError()
+
+                                let cur = stk.pop()
+                                if (cur != tokens[j].value) throwError()
+
                                 if (!stk.length) {
                                     i = j
                                     break
-                                }
-                                else {
-                                    stk.pop()
                                 }
                             }
                         }
@@ -83,34 +94,52 @@ const toPostFix = (tokens) => {
                     opp.push({ type: 'operator', value: 'call', args: parseParams(val), line: line, col: col })
                 } else opp.push(tokens[i])
             } else if (tokens[i].value == '[') {
-                if (!value[value.length - 1] || value[value.length - 1].type != 'variable') {
-                    let stk = []
-                    let val = []
-                    let col = tokens[i].col, line = tokens[i].line;
-                    for (let j = i + 1; j < tokens.length; j++) {
-                        if (tokens[j].value == ']') {
-                            i = j
-                            break;
-                        }
-                        val.push(tokens[j])
-                    }
+                let stk = [']']
+                let val = []
+                let col = tokens[i].col, line = tokens[i].line;
 
-                    opp.push({ type: 'array', value: parseArray(val), line: line, col: col })
+                if (tokens[i - 1] && tokens[i - 1].type == 'variable') {
+                    opp.push({ type: 'operator', value: '.+', line: line, col: col })
                 }
-            }
-            if (tokens[i].value == ')') {
+
+                for (let j = i + 1; j < tokens.length; j++) {
+                    if (tokens[j].type == 'symbol') {
+                        if (tokens[j].value == '(' || tokens[j].value == '[' || tokens[j].value == '{') {
+                            stk.push(bracketPairs[tokens[j].value])
+                        } else if (tokens[j].value == ')' || tokens[j].value == ']' || tokens[j].value == '}') {
+                            if (!stk.length) throwError()
+
+                            let cur = stk.pop()
+                            if (cur != tokens[j].value) throwError()
+
+                            if (!stk.length) {
+                                i = j
+                                break
+                            }
+                        }
+                    }
+                    val.push(tokens[j])
+                }
+                value.push({ type: 'array', value: parseArray(val), line: line, col: col })
+            } else if (tokens[i].value == ')') {
                 while (opp.length && (opp[opp.length - 1].value != '(' && opp[opp.length - 1].type != 'symbol')) {
                     value.push(opp.pop())
                 }
                 opp.pop()
             }
+        } else if (tokens[i].type == 'assignment') {
+            if (!value.length) throwError();
+
+            while(opp.length) {
+                value.push(opp.pop())
+            }
+            return [{ type: 'assignment', lhs: value, rhs: toPostFix(tokens.slice(i + 1)) }]
         }
     }
 
     while (opp.length) {
         value.push(opp.pop())
     }
-
     return value
 }
 
@@ -140,10 +169,13 @@ const parseParams = (tokens) => {
     let temp = []
     for (let i = 0; i < tokens.length; i++) {
         if (tokens[i].type == 'symbol') {
-            if (tokens[i].value == '(') stk.push(tokens[i])
-            else if (tokens[i].value == ')') {
-                if (!stk.length) throw Error
-                else stk.pop()
+            if (tokens[i].value == '(' || tokens[i].value == '[' || tokens[i].value == '{') {
+                stk.push(bracketPairs[tokens[i].value])
+            } else if (tokens[i].value == ')' || tokens[i].value == ']' || tokens[i].value == '}') {
+                if (!stk.length) throwError()
+
+                let cur = stk.pop()
+                if (cur != tokens[i].value) throwError()
             } else if (tokens[i].value == ',') {
                 if (!stk.length) {
                     i++
@@ -345,10 +377,10 @@ class Parser {
                 throw Error()
             } else {
                 if (curr.value) {
-                    return await this.parseNext({ type: 'assignment', lhs: prev, rhs: [prev, ...toPostFix(await this.collectTokens({ type: 'delim' })), { type: 'operator', value: curr.value }] })
+                    return await this.parseNext({ type: 'assignment', lhs: [prev], rhs: [prev, ...toPostFix(await this.collectTokens({ type: 'delim' })), { type: 'operator', value: curr.value }] })
                 }
 
-                return await this.parseNext({ type: 'assignment', lhs: prev, rhs: toPostFix(await this.collectTokens({ type: 'delim' })) })
+                return await this.parseNext({ type: 'assignment', lhs: [prev], rhs: toPostFix(await this.collectTokens({ type: 'delim' })) })
             }
         }
 
@@ -423,9 +455,17 @@ class Parser {
 
         if (curr.type == 'symbol' || curr.type == 'operator') {
             if (prev) {
-                return this.parseNext({ type: 'expr', value: toPostFix([prev, curr, ...await this.collectTokens({ type: 'delim' })]) })
+                let next = toPostFix([prev, curr, ...await this.collectTokens({ type: 'delim' })])
+
+                if (next[0]?.type == 'assignment') {
+                    return this.parseNext(next[0])
+                } else return this.parseNext({ type: 'expr', value: next })
             } else {
-                return this.parseNext({ type: 'expr', value: toPostFix([curr, ...await this.collectTokens({ type: 'delim' })]) })
+                let next = toPostFix([curr, ...await this.collectTokens({ type: 'delim' })]);
+
+                if (next[0]?.type == 'assignment') {
+                    return this.parseNext(next[0])
+                } else return this.parseNext({ type: 'expr', value: next })
             }
         }
 

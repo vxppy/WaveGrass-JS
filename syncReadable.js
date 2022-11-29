@@ -12,6 +12,7 @@ const createReadStream = (path, encoding = 'utf-8') => {
         stream.close()
         process.exit(1)
     })
+    
     return {
         read: async (size) => {
             return new Promise(res => {

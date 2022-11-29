@@ -1,5 +1,5 @@
 const throwError = require("./errors")
-const { createObject, WaveGrassFunction, WaveGrassNumber, WaveGrassString, WaveGrassError, WaveGrassNull, WaveGrassObject, _console } = require("./wavegrassObject")
+const { createObject, WaveGrassFunction, WaveGrassNumber, WaveGrassString, WaveGrassError, WaveGrassNull, WaveGrassObject, _console, num, WaveGrassArray, WGNULL } = require("./wavegrassObject")
 const { wrap } = require("./wrap")
 
 /**
@@ -23,6 +23,11 @@ class Environment {
             console: {
                 ref: false,
                 value: _console,
+                const: false
+            },
+            toNumber: {
+                ref: false,
+                value: num,
                 const: false
             }
         }
@@ -174,11 +179,39 @@ class Environment {
             if (typeof value == 'function') {
                 value = new WaveGrassFunction(rhs.value, ['*n'], `<internal_${rhs.value}>`, WaveGrassError.file, true, lhs)
             }
-            if (value instanceof WaveGrassObject) {
 
+
+            if (!(value instanceof WaveGrassObject)) {
+                value = createObject(typeof value, value)
+            }
+
+        } else if (opp.value == '.+') {
+            if (rhs.__value.length == 1) {
+                value = lhs.__get_property__(rhs.__value[0])
+
+                if (typeof value == 'function') {
+                    value = new WaveGrassFunction(rhs.__value[0].__value_of__(), ['*n'], `<internal_${rhs.__value[0].__value_of__()}>`, WaveGrassError.file, true, lhs)
+                }
+
+                if (!(value instanceof WaveGrassObject)) {
+                    if (value.changeable !== null) value = value.value
+                    else value = createObject(typeof value, value)
+                }
             } else {
-                if (value.changeable !== null) value = value.value
-                else value = createObject(typeof value, value)
+                value = new WaveGrassArray([])
+                for (let i = 0; i < rhs.__value.length; i++) {
+
+                    let v = lhs.__get_property__(rhs.__value[i])
+                    if (typeof v == 'function') {
+                        v = new WaveGrassFunction(rhs.__value[i].__value_of__(), ['*n'], `<internal_${rhs.__value[i].__value_of__()}>`, WaveGrassError.file, true, lhs)
+                    }
+                    if (!(value instanceof WaveGrassObject)) {
+                        if (v.changeable !== null) value = v.value
+                        else v = createObject(typeof v, v)
+                    }
+
+                    value.push(v)
+                }
             }
         } else if (opp.value == '===') {
             value = lhs.__strict_equals__(rhs)
@@ -233,7 +266,7 @@ class Environment {
                 rhs: rhs
             }
         } else {
-            value = new WaveGrassNull()
+            value = WGNULL
         }
 
         if (WaveGrassError.isError(value)) {
@@ -292,6 +325,50 @@ class Environment {
         return value[0]
     }
 
+    async setProperties(tokens, value) {
+        let va = [];
+        let val = await this.operate(value)
+        let prop = await this.operate([tokens[0]])
+        for (let i = 1; i < tokens.length; i++) {
+            if (tokens[i].type == 'operator') {
+                if (tokens[i].value == '.+') {
+                    let v = va.pop()
+                    if (i == tokens.length - 1) {
+                        if (v.__type == 'array') {
+                            if(v.__properties.length == 1) {
+                                prop.__set_property__(v.__value[0], val)
+                            } else {
+                                if(val.__type == 'array') {
+                                    for (let i = 0; i < v.__properties.length; i++) {
+                                        prop.__set_property__(v.__value[i], val.__value[i])
+                                    }
+                                } else {
+                                    for (let i = 0; i < v.__properties.length; i++) {
+                                        prop.__set_property__(v.__value[i], val)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        prop = prop.__get_property__(v)
+                    }
+                } else {
+                    let v = va.pop()
+                    if(i == tokens.length - 1) {
+                        prop.__set_property__(v.value, val)
+                    } else {
+                        prop = prop.__get_property__(v.value)
+                    }
+                }
+            } else {
+                if (tokens[i + 1] && tokens[i + 1].type == 'operator' && tokens[i + 1].value == '.+')
+                    va.push(await this.operate([tokens[i]]))
+                else va.push(tokens[i])
+            }
+        }
+        return WGNULL
+    }
+
     /**
      * 
      * @param { Token[][] } args 
@@ -319,21 +396,25 @@ class Environment {
         if (ast.type == 'expr') {
             return await this.operate(ast.value)
         } else if (ast.type == 'assignment') {
-            let v = this.getVariable(ast.lhs.value)
-            if (v) {
-                if (ast.lhs.def) throwError(new WaveGrassError())
+            if (ast.lhs.length == 1) {
+                let v = this.getVariable(ast.lhs[0].value)
+                if (v) {
+                    if (ast.lhs.def) throwError(new WaveGrassError())
 
-                if (v.const) {
-                    throwError(new WaveGrassError())
+                    if (v.const) {
+                        throwError(new WaveGrassError())
+                    } else {
+                        v.value = await this.operate(ast.rhs)
+                    }
                 } else {
-                    v.value = await this.operate(ast.rhs)
+                    let scope = this.getScope(ast.lhs[0].value)
+                    this._scopes[scope][ast.lhs[0].value] = {
+                        value: await this.operate(ast.rhs),
+                        const: ast.lhs[0].const
+                    }
                 }
             } else {
-                let scope = this.getScope(ast.lhs.value)
-                this._scopes[scope][ast.lhs.value] = {
-                    value: await this.operate(ast.rhs),
-                    const: ast.lhs.const
-                }
+                await this.setProperties(ast.lhs, ast.rhs)
             }
         } else if (ast.type == 'call') {
             let func = ast.function;
@@ -345,15 +426,33 @@ class Environment {
                     } else {
                         return func.__string__()
                     }
+                } else if (statement == '<internal_push>') {
+                    return func.__belongs_to.push(...ast.args.positional)
                 }
             } else {
                 let scope = `${func.__name}${this._stack.length}`
+                let argobj = new WaveGrassObject()
+
+                argobj.__properties['positional'] = new WaveGrassArray(ast.args.positional)
+                argobj.__properties['keyword'] = new WaveGrassObject()
+
                 this._stack.push(scope)
-                this._scopes[scope] = {}
+                this._scopes[scope] = {
+                    this: {
+                        ref: false,
+                        const: false,
+                        value: func
+                    },
+                    arguments: {
+                        ref: false,
+                        const: false,
+                        value: argobj
+                    }
+                }
 
                 for (let i = 0; i < func.__args.length; i++) {
                     this._scopes[scope][func.__args[i].value] = {
-                        value: ast.args.positional[i] ?? new WaveGrassNull(),
+                        value: ast.args.positional[i] ?? WGNULL,
                         const: false
                     }
                 }
@@ -365,6 +464,8 @@ class Environment {
                             const: false
                         }
                     }
+
+                    argobj.__properties['keyword'].__properties[i] = ast.args.key[i]
                 }
 
                 let statements = func.__get_statements__()
@@ -376,7 +477,7 @@ class Environment {
                 this._scopes[scope] = null
                 this._stack.pop()
 
-                return new WaveGrassNull()
+                return WGNULL
             }
         } else if (ast.type == 'if') {
             let scope = `if${this._stack.length}`

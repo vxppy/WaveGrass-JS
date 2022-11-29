@@ -6,27 +6,31 @@ const BOOLEANS = ['true', 'false']
 
 class Lexer {
     /**
-     * @type { string }
+     * @type { string, line: this._line, col: this._col }
      */
     _buffer = ''
     /**
-     * @type { { read: (size: number) => Promise<str> } }
+     * @type { { read: (size: number) => Promise<str> }, line: this._line, col: this._col }
      */
     _reader
     /**
-     * @type { number }
+     * @type { number, line: this._line, col: this._col }
      */
     _readpos = 0
     /**
-     * @type { string }
+     * @type { string, line: this._line, col: this._col }
      */
     _lastchar = null
 
     _buffering = false
 
+    _col = -1
+
+    _line = 1
+
     /**
      * 
-     * @param { string } filename 
+     * @param { string, line: this._line, col: this._col } filename 
      */
     constructor(filename) {
         this._reader = createReadStream(filename)
@@ -34,7 +38,7 @@ class Lexer {
 
 
     /**
-     * @returns { Promise<{ type: str, value: any }> }
+     * @returns { Promise<{ type: str, value: any }>, line: this._line, col: this._col }
      */
     async requestNextToken() {
         if(this._lastchar) {
@@ -42,16 +46,20 @@ class Lexer {
             this._lastchar = null
             return chr
         }
+
+        this._col++
+
         if (!this._buffer && this._buffer != '') {
-            this._lastchar = { type: 'EOF' }
-            return { type: 'delim' }
+            this._lastchar = { type: 'EOF', line: this._line, col: this._col }
+            return { type: 'delim', line: this._line, col: this._col }
         }
+
         if (this._readpos == this._buffer.length) {
             await this._fillBuffer()
 
             if (!this._buffer) {
-                this._lastchar = { type: 'EOF' }
-                return { type: 'delim' }
+                this._lastchar = { type: 'EOF', line: this._line, col: this._col }
+                return { type: 'delim', line: this._line, col: this._col }
             }
         }
 
@@ -66,40 +74,44 @@ class Lexer {
             }
 
             if (!this._buffer) { 
-                this._lastchar = { type: 'EOF' }
-                return { type: 'delim' }
+                this._lastchar = { type: 'EOF', line: this._line, col: this._col }
+                return { type: 'delim', line: this._line, col: this._col }
             }
         }
         if (currCode == 10) {
             this._readpos++
-            if (!this._buffering || this._readpos == this._buffer.length) return { type: 'delim' }
+            if (!this._buffering || this._readpos == this._buffer.length) return { type: 'delim', line: this._line++, col: this._col = 0 }
             else return await this.requestNextToken();
         }
-        if (currCode > 48 && currCode < 58) {
-            return { type: 'number', value: await this._parseNum() }
+        if (currCode > 47 && currCode < 58) {
+            let col = this._col, line = this._line
+            return { type: 'number', value: await this._parseNum(), line: line, col: col }
         } if (currCode == 34 || currCode == 39) {
-            return { type: 'string', value: await this._parseString() }
+            let col = this._col, line = this._line
+            return { type: 'string', value: await this._parseString(), line: line, col: col }
         } if ((currCode > 64 && currCode < 91) || (currCode > 96 && currCode < 123) || currCode == 95) {
+            let col = this._col, line = this._line
             let val = await this._parseName()
+
             if (KEYWORDS.includes(val)) {
                 this._buffering = true
-                return { type: 'keyword', value: val }
+                return { type: 'keyword', value: val, line: line, col: col }
             }
-            return { type: BOOLEANS.includes(val) ? 'boolean' : 'variable', value: val }
+            return { type: BOOLEANS.includes(val) ? 'boolean' : 'variable', value: val, line: line, col: col }
         } if (currCode == 61) {
             this._readpos++
 
             if (this._readpos == this._buffer.length) {
                 await this._fillBuffer()
-                if (!this._buffer) return { type: 'assignment' }
+                if (!this._buffer) return { type: 'assignment', line: this._line, col: this._col }
             } 
 
             if(this._buffer[this._readpos] == '=') {
                 this._readpos++
-                return { type: 'operator', value: '==' }
+                return { type: 'operator', value: '==', line: this._line, col: this._col }
             }
 
-            return { type: 'assignment' }
+            return { type: 'assignment', line: this._line, col: this._col }
         }
 
         let curr = this._buffer[this._readpos]
@@ -110,32 +122,32 @@ class Lexer {
             if (this._readpos == this._buffer.length) {
                 await this._fillBuffer()
 
-                if (!this._buffer) return { type: 'operator', value: curr }
+                if (!this._buffer) return { type: 'operator', value: curr, line: this._line, col: this._col }
             }
 
             if (this._buffer[this._readpos] == curr) {
                 this._readpos++
-                return { type: 'operator', value: `${curr}${curr}` }
+                return { type: 'operator', value: `${curr}${curr}`, line: this._line, col: this._col }
             }
 
             if (this._buffer[this._readpos] == '=') {
                 this._readpos++
-                return { type: 'operator', value: `${curr}=` }
+                return { type: 'operator', value: `${curr}=`, line: this._line, col: this._col }
             }
 
-            return { type: 'operator', value: curr }
+            return { type: 'operator', value: curr, line: this._line, col: this._col }
         }
 
         if (curr == ':') {
             this._readpos++
-            return { type: 'operator', value: ':' }
+            return { type: 'operator', value: ':', line: this._line, col: this._col }
         }
 
         if (curr == '.') {
             this._readpos++
             if (this._readpos == this._buffer.length) {
                 await this._fillBuffer()
-                if (!this._buffer) return { type: 'operator', value: curr }
+                if (!this._buffer) return { type: 'operator', value: curr, line: this._line, col: this._col }
             }
 
             if (this._buffer[this._readpos] == curr) {
@@ -149,21 +161,21 @@ class Lexer {
                 if (this._buffer[this._readpos] == curr) {
                     this._readpos++
 
-                    return { type: 'operator', value: '...' }
+                    return { type: 'operator', value: '...', line: this._line, col: this._col }
                 }
 
                 throw Error()
             }
-            return { type: 'operator', value: curr }
+            return { type: 'operator', value: curr, line: this._line, col: this._col }
         } else if (curr == '{') {
             this._readpos++
             if (this._buffering) {
                 this._buffering = false
             }
 
-            return { type: 'symbol', value: curr }
+            return { type: 'symbol', value: curr, line: this._line, col: this._col }
         }
-        return { type: 'symbol', value: this._buffer[this._readpos++] }
+        return { type: 'symbol', value: this._buffer[this._readpos++], line: this._line, col: this._col }
     }
 
     async _fillBuffer() {
@@ -195,6 +207,7 @@ class Lexer {
         let str = []
         this._readpos++
         while (this._buffer[this._readpos] != delim) {
+            this._col++
             if (this._readpos == this._buffer.length) {
                 await this._fillBuffer()
             }
@@ -225,6 +238,7 @@ class Lexer {
             }
 
             if (!this._buffer) break;
+            this._col++
             currCode = this._buffer.charCodeAt(this._readpos)
         }
 

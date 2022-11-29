@@ -208,19 +208,19 @@ class WaveGrassObject {
      * @returns { WaveGrassNull | { next: () => { value: WaveGrassObject, index: WaveGrassNumber, finished: WaveGrassBoolean } } }
      */
     __iterator__ = () => {
-        return new WaveGrassNull()
+        return WGNULL
     }
 
     __get_property__ = name => {
         if (name instanceof WaveGrassObject) name = name.__value_of__()
 
-        if (['constructor', 'prototype'].includes(name)) return new WaveGrassNull()
+        if (['constructor', 'prototype'].includes(name)) return WGNULL
 
         if (this.__properties[name]) return this.__properties[name]
 
         if (this[name]) return this[name]
 
-        return new WaveGrassNull()
+        return WGNULL
     }
 
     __set_property__ = (name, value) => {
@@ -439,7 +439,7 @@ class WaveGrassString extends WaveGrassObject {
         super(value)
         this.__type = 'string'
         this.__mutable = false
-        this.length = new WaveGrassNumber(this.__value_of__().length)
+        this.__properties.length = value.length
     }
 
     __string__ = () => {
@@ -491,7 +491,7 @@ class WaveGrassArray extends WaveGrassObject {
 
         this.__type = 'array'
         this.__mutable = true
-        this.length = new WaveGrassNumber(values.length)
+        this.__properties.length = values.length
     }
 
     __bool__ = () => {
@@ -501,23 +501,22 @@ class WaveGrassArray extends WaveGrassObject {
 
     __string__ = (colored, depth = 1) => {
         let str = []
-        let len = this.length.__value_of__()
-        for (let i = 0; i < len; i++) {
+        for (let i = 0; i < this.__properties.length; i++) {
             let v = this.__value[i]
-            if (!v) v = new WaveGrassNull()
+
+            if (!v) v = WGNULL
             if (v.__type__() == 'string') {
                 str.push(colored ? `\x1b[32m'${v.__string__().replace(/'/, '\\\'')}'\x1b[0m` : `'${v.__string__().replace(/'/, '\\\'')}'`)
-            } else {
-                if (v.__type__() == 'array') {
-                    if (globalDepth == depth) {
-                        str.push(colored ? `\x1b[36m[Array]\x1b[0m` : '[Array]')
-                    } else {
-                        str.push(v.__string__(colored, depth + 1))
-                    }
+            } else if (v.__type__() == 'array') {
+                if (globalDepth == depth) {
+                    str.push(colored ? `\x1b[36m[Array]\x1b[0m` : '[Array]')
                 } else {
-                    str.push(v.__string__(colored))
+                    str.push(v.__string__(colored, depth + 1))
                 }
+            } else {
+                str.push(v.__string__(colored))
             }
+
         }
         return `[ ${str.join(', ')} ]`
     }
@@ -598,26 +597,19 @@ class WaveGrassArray extends WaveGrassObject {
     __set_property__ = (name, value) => {
         if (name instanceof WaveGrassObject) name = name.__value_of__()
 
-        if (isNaN(parseInt(name))) {
-            this.__properties[name] = value ?? new WaveGrassNull()
+        if (isNaN(name)) {
+            this.__properties[name] = value ?? WGNULL
         } else {
-            for (let i in this.__value) {
-                if (i > name) {
-                    this.__value[name] = value ?? new WaveGrassNull()
-                    return
-                }
-            }
-
-            this.length.__value = name + 1
-            this.__value[`${name}`] = value ?? new WaveGrassNull()
+            this.__value[`${name}`] = value ?? WGNULL
+            this.__properties.length = this.__value.length
         }
     }
 
     __get_property__ = (name) => {
         if (name instanceof WaveGrassObject) name = name.__value_of__()
 
-        if (isNaN(parseInt(name))) {
-            if (['constructor', 'prototype'].includes(name)) return new WaveGrassNull()
+        if (isNaN(name)) {
+            if (['constructor', 'prototype'].includes(name)) return WGNULL
 
             if (this.__properties[name]) return this.__properties[name]
 
@@ -625,9 +617,9 @@ class WaveGrassArray extends WaveGrassObject {
                 return this[name]
             }
 
-            return new WaveGrassNull()
+            return WGNULL
         } else {
-            return this.__value[name]
+            return this.__value[name] ?? WGNULL
         }
     }
 
@@ -636,7 +628,7 @@ class WaveGrassArray extends WaveGrassObject {
         let len = this.length.__value_of__()
         return {
             next: () => {
-                return { value: this.__value[index] ?? new WaveGrassNull(), index: new WaveGrassNumber(index++), finished: new WaveGrassBoolean(index > len) }
+                return { value: this.__value[index] ?? WGNULL, index: new WaveGrassNumber(index++), finished: new WaveGrassBoolean(index > len) }
             }
         }
     }
@@ -650,7 +642,7 @@ class WaveGrassArray extends WaveGrassObject {
 
             return value
         }
-        return new WaveGrassNull()
+        return WGNULL
     }
 
     push = (...items) => {
@@ -698,13 +690,13 @@ class WaveGrassFunction extends WaveGrassObject {
     __get_property__ = name => {
         if (name instanceof WaveGrassObject) name = name.__value_of__()
 
-        if (['constructor', 'prototype', '__get_args__', '__get_statements__', '__internal__', '__belongs_to__', '__native__', '__native_function__'].includes(name)) return new WaveGrassNull()
+        if (['constructor', 'prototype', '__get_args__', '__get_statements__', '__internal__', '__belongs_to__', '__native__', '__native_function__'].includes(name)) return WGNULL
 
         if (this.__properties[name]) return this.__properties[name]
 
         if (this[name]) return this[name]
 
-        return new WaveGrassNull()
+        return WGNULL
     }
 }
 
@@ -806,15 +798,13 @@ class WaveGrassModule extends WaveGrassObject {
             return this[name]
         }
 
-        return new WaveGrassNull()
+        return WGNULL
     }
 
     __set_property__ = () => {
         return new WaveGrassError('TypeError', `Cannot set property of ${this.__type__()}`)
     }
 }
-// const print = new WaveGrassFunction('print', ['*nargs', 'sep', 'end'], '<internal_print>', 'global', true)
-// const prompt = new WaveGrassFunction('prompt', ['prompt'], '<internal_prompt>', 'global', true)
 // const parseNum = new WaveGrassFunction('parseNum', ['value', 'base'], '<internal_to_num>', 'global', true)
 // const _isNaN = new WaveGrassFunction('isNaN', ['value'], '<internal_isNaN>', 'global', true)
 // const _import = new WaveGrassFunction('isNaN', ['value'], '<internal_import>', 'global', true)
@@ -824,7 +814,7 @@ class WaveGrassModule extends WaveGrassObject {
 // _JSON.__set_property__('toStr', new WaveGrassFunction('toStr', ['obj', 'indent', 'replace'], '<internal_JSON_str>', 'global', true))
 
 
-const log = (args, colored) => {
+const log = (args) => {
     process.stdout.write(`${args.positional.map(i => i.__string__(args.key.color?.__value_of__())).join(args.key.sep?.__value_of__() ?? ' ')}${args.key.end?.__value_of__() ?? '\n'}`)
 }
 
@@ -835,6 +825,12 @@ const _input = async (args) => {
 const err = (args) => {
     process.stderr.write(`\x1b[31m${args.positional.map(i => i.__string__()).join(args.key.sep?.__value_of__() ?? ' ')}${args.key.end?.__value_of__() ?? '\n'}\x1b[0m`)
 }
+
+const _num = (args) => {
+    return WaveGrassNumber.parseInt(args.key.value ?? (args.positional[0] ?? 10), args.key.radix?.__value_of__() ?? (args.positional[1]?.__value_of__() ?? 10))
+}
+
+const num = new WaveGrassFunction('num', ['num', 'radix'], [], 'global', true, null, true, _num)
 
 const _console = new WaveGrassObject()
 _console.__properties['write'] = new WaveGrassFunction('log', ['*', 'sep', 'end'], [], 'global', true, null, true, log)
@@ -855,14 +851,16 @@ const createObject = (type, ...extra) => {
     if (['number', 'string', 'method', 'array', 'boolean', 'null'].includes(type)) {
         let obj = new (getClassFromType(type))(...extra)
         return obj
-    } 
+    }
 }
+
+const WGNULL = new WaveGrassNull()
 
 module.exports = {
     WaveGrassObject, WaveGrassNumber, WaveGrassString,
     WaveGrassArray, WaveGrassBoolean, WaveGrassError,
     WaveGrassFunction, WaveGrassNull, WaveGrassModule,
-    createObject, _console
+    createObject, _console, num, WGNULL
     //print, prompt, 
     //parseNum, _isNaN, _import, _importJS, _JSON
 }
