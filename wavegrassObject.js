@@ -497,7 +497,7 @@ class WaveGrassArray extends WaveGrassObject {
     }
 
     __bool__ = () => {
-        if (this.length.__value_of__() == 0) return new WaveGrassBoolean(false)
+        if (!this.__properties.length) return new WaveGrassBoolean(false)
         return new WaveGrassBoolean(true)
     }
 
@@ -532,7 +532,7 @@ class WaveGrassArray extends WaveGrassObject {
 
         let arr = new WaveGrassArray({}, 0)
 
-        let len = this.length.__value_of__()
+        let len = this.__properties.length
         for (let i = 0; i < len; i++) {
             if (this.__value[i].__type__() == 'array') {
                 arr.push(this.__value[i])
@@ -572,7 +572,7 @@ class WaveGrassArray extends WaveGrassObject {
             value = iter.next()
         } while (!value.finished.__value_of__())
 
-        let len = this.length.__value_of__()
+        let len = this.__properties.length
         for (let i = 0; i < len; i++) {
             arr.__value.push(this[i])
         }
@@ -587,7 +587,7 @@ class WaveGrassArray extends WaveGrassObject {
             return new WaveGrassError(`Cannot multiply <class ${rval.__type__()}> and <class array>`)
         } else {
             let arr = new WaveGrassArray({}, 0)
-            let len = this.length.__value_of__()
+            let len = this.__properties.length
             let arr_len = len * val
             for (let i = 0; i < arr_len; i++) {
                 arr.push(this.__value[i % len])
@@ -627,7 +627,7 @@ class WaveGrassArray extends WaveGrassObject {
 
     __iterator__ = () => {
         let index = 0
-        let len = this.length.__value_of__()
+        let len = this.__properties.length
         return {
             next: () => {
                 return { value: this.__value[index] ?? WGNULL, index: new WaveGrassNumber(index++), finished: new WaveGrassBoolean(index > len) }
@@ -636,11 +636,11 @@ class WaveGrassArray extends WaveGrassObject {
     }
 
     pop = () => {
-        if (this.length.__value_of__() > 0) {
-            this.length.__value--
+        if (this.__properties.length > 0) {
+            this.__properties.length--
 
-            let value = this.__value[this.length.__value_of__()]
-            delete this.__value[this.length.__value_of__()]
+            let value = this.__value[this.__properties.length]
+            delete this.__value[this.__properties.length]
 
             return value
         }
@@ -649,10 +649,10 @@ class WaveGrassArray extends WaveGrassObject {
 
     push = (...items) => {
         for (let i = 0; i < items.length; i++) {
-            this.__value[this.length.__value_of__()] = items[i]
-            this.length.__value++
+            this.__value[this.__properties.length] = items[i]
+            this.__properties.length++
         }
-        return this.length
+        return this.__properties.length
     }
 }
 
