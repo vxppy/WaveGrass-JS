@@ -216,6 +216,8 @@ class WaveGrassObject {
 
         if (['constructor', 'prototype'].includes(name)) return WGNULL
 
+        if (this.__value[name]) return this.__value[name]
+
         if (this.__properties[name]) return this.__properties[name]
 
         if (this[name]) return this[name]
@@ -832,7 +834,7 @@ const _num = (args) => {
 
 const num = new WaveGrassFunction('num', ['num', 'radix'], [], 'global', true, null, true, _num)
 
-const _console = new WaveGrassObject()
+const _console = new WaveGrassObject({})
 _console.__properties['write'] = new WaveGrassFunction('log', ['*', 'sep', 'end'], [], 'global', true, null, true, log)
 _console.__properties['read'] = new WaveGrassFunction('input', ['message'], [], 'global', true, null, true, _input)
 _console.__properties['error'] = new WaveGrassFunction('error', ['*', 'sep', 'end'], [], 'global', true, null, true, err)
@@ -844,12 +846,24 @@ const getClassFromType = (obj) => {
     else if (obj == 'array') return WaveGrassArray
     else if (obj == 'method') return WaveGrassFunction
     else if (obj == 'boolean') return WaveGrassBoolean
+
     return WaveGrassNull
 }
 
-const createObject = (type, ...extra) => {
+const createObject = (type, value) => {
     if (['number', 'string', 'method', 'array', 'boolean', 'null'].includes(type)) {
-        let obj = new (getClassFromType(type))(...extra)
+        let obj = new (getClassFromType(type))(value)
+        return obj
+    } else {
+        let obj = new WaveGrassObject({})
+        for(let i = 0; i < value.length; i += 2) {
+            if(value[i] instanceof WaveGrassArray) {
+                for(let j = 0; j < value[i].__properties.length; j++) {
+                    obj.__value[value[i].__value[j].__value_of__()] = value[i + 1]
+                }
+            }
+            obj.__value[value[i]] = value[i + 1]
+        }
         return obj
     }
 }

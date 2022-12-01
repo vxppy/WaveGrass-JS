@@ -47,6 +47,8 @@ const VALUES = ['variable', 'number', 'string', 'boolean', 'call', 'array']
  * @returns { Token[] }
  */
 const toPostFix = (tokens) => {
+    // console.log(tokens)
+
     let opp = []
     let value = []
 
@@ -126,6 +128,31 @@ const toPostFix = (tokens) => {
                     value.push(opp.pop())
                 }
                 opp.pop()
+            } else if(tokens[i].value == '{') {
+                let stk = ['}']
+                let val = []
+                let col = tokens[i].col, line = tokens[i].line;
+
+                for (let j = i + 1; j < tokens.length; j++) {
+                    if (tokens[j].type == 'symbol') {
+                        if (tokens[j].value == '(' || tokens[j].value == '[' || tokens[j].value == '{') {
+                            stk.push(bracketPairs[tokens[j].value])
+                        } else if (tokens[j].value == ')' || tokens[j].value == ']' || tokens[j].value == '}') {
+                            if (!stk.length) throwError()
+
+                            let cur = stk.pop()
+                            if (cur != tokens[j].value) throwError()
+
+                            // console.log(stk)
+                            if (!stk.length) {
+                                i = j
+                                break
+                            }
+                        }
+                    }
+                    val.push(tokens[j])
+                }
+                value.push({ type: 'obj', value: parseObj(val), line: line, col: col })
             }
         } else if (tokens[i].type == 'assignment') {
             if (!value.length) throwError();
@@ -140,6 +167,7 @@ const toPostFix = (tokens) => {
     while (opp.length) {
         value.push(opp.pop())
     }
+    // console.log(value)
     return value
 }
 
@@ -197,6 +225,57 @@ const parseParams = (tokens) => {
 /**
  * 
  * @param { Token[] } tokens 
+ * @returns { { [key: string]: Token[] } }
+ */
+const parseObj = (tokens) => {
+    let stk = []
+    let values = []
+    let temp = []
+    for (let i = 0; i < tokens.length; i++) {
+        if (tokens[i].type == 'symbol') {
+            if (tokens[i].value == '(' || tokens[i].value == '[' || tokens[i].value == '{') {
+                stk.push(bracketPairs[tokens[i].value])
+                temp.push(tokens[i])
+            } else if (tokens[i].value == ')' || tokens[i].value == ']' || tokens[i].value == '}') {
+                if (!stk.length) throwError()
+                let cur = stk.pop()
+                if (cur != tokens[i].value) throwError()
+                temp.push(tokens[i])
+            } else if (tokens[i].value == ',') {
+                if (!stk.length) {
+                    values.push(toPostFix(temp))
+                    temp = []
+                } else {
+                    temp.push(tokens[i])
+                }
+            }
+        } else if(tokens[i].type == 'operator') {
+            if (tokens[i].value == ':') {
+                if(!stk.length) {
+                    if(!temp.length) throwError()
+                    values.push(toPostFix(temp))
+                    temp = []
+                } else {
+                    temp.push(tokens[i])
+                }
+            }
+        } else {
+            temp.push(tokens[i])
+        }
+    }
+
+
+    // console.log(temp)
+
+    if (temp.length) {
+        values.push(toPostFix(temp))
+    }
+    return values
+}
+
+/**
+ * 
+ * @param { Token[] } tokens 
  * @returns { Token[][] }
  */
 
@@ -206,10 +285,13 @@ const parseArray = (tokens) => {
     let temp = []
     for (let i = 0; i < tokens.length; i++) {
         if (tokens[i].type == 'symbol') {
-            if (tokens[i].value == '(') stk.push(tokens[i])
-            else if (tokens[i].value == ')') {
-                if (!stk.length) throw Error
-                else stk.pop()
+            if (tokens[i].value == '(' || tokens[i].value == '[' || tokens[i].value == '{') {
+                stk.push(bracketPairs[tokens[i].value])
+            } else if (tokens[i].value == ')' || tokens[i].value == ']' || tokens[i].value == '}') {
+                if (!stk.length) throwError()
+
+                let cur = stk.pop()
+                if (cur != tokens[i].value) throwError()
             } else if (tokens[i].value == ',') {
                 if (!stk.length) {
                     i++
@@ -242,7 +324,6 @@ class Parser {
     async collectTokens(till) {
         let tokens = []
         let token = await this._lexer.requestNextToken()
-
         let end = true
 
         if (till.value) {

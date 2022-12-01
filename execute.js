@@ -318,12 +318,29 @@ class Environment {
                         tokens[i].value[j] = await this.operate(tokens[i].value[j])
                     }
                 }
+
+                if(tokens[i].type == 'obj') {
+                    // console.log(tokens[i].value)
+                    for(let j = 0; j < tokens[i].value.length; j += 2) {
+                        if(tokens[i].value[j][0].type != 'array') {
+                            tokens[i].value[j] = tokens[i].value[j][0].value
+                        } else {
+                            tokens[i].value[j] = await this.operate(tokens[i].value[j])
+                        }
+                        tokens[i].value[j + 1] = await this.operate(tokens[i].value[j + 1])
+                    
+                    }
+                }
+                // console.log(tokens[i])
+
                 value.push(createObject(tokens[i].type, tokens[i].value))
             }
         }
 
         return value[0]
     }
+
+    // createObj()
 
     async setProperties(tokens, value) {
         let va = [];
